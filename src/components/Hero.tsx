@@ -1,0 +1,108 @@
+import { motion } from "motion/react";
+
+const VIDEO_URL =
+  "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260603_132049_036591b8-6e92-4760-b94c-a7ea6eef315c.mp4";
+
+function EyePill() {
+  return (
+    <span className="w-[16px] md:w-[42px] lg:w-[62px] h-[16px] md:h-[28px] lg:h-[34px] border-[2px] border-[#1a1a1a] rounded-full inline-flex items-center justify-center align-middle mx-1 md:mx-2">
+      <span className="w-2 h-2 rounded-full bg-[#1a1a1a]" />
+    </span>
+  );
+}
+
+export default function Hero() {
+  return (
+    <section className="relative min-h-[110vh] sm:min-h-[140vh] w-full flex flex-col items-center justify-start overflow-hidden bg-bg-base">
+      {/* Background video */}
+      <div className="absolute top-[15vh] sm:top-[20vh] left-0 w-full h-[95vh] sm:h-[120vh] z-0 pointer-events-none">
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="w-full h-full object-cover opacity-100"
+          src={VIDEO_URL}
+        />
+        <div className="absolute top-0 left-0 w-full h-24 sm:h-32 bg-gradient-to-b from-bg-base to-transparent"></div>
+      </div>
+
+      {/* Hero content */}
+      <div className="max-w-7xl w-full mx-auto px-8 md:px-16 lg:px-20 relative z-10 grid grid-cols-12 gap-x-4 md:gap-x-8 pt-32 sm:pt-40 md:pt-44">
+        <div className="col-span-12 md:col-span-10 md:col-start-2">
+          <motion.h1
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="font-display font-medium tracking-tight text-[2.35rem] leading-[1.12] sm:text-5xl lg:text-6xl xl:text-[64px]"
+          >
+            <span className="text-[#1a1a1a]">Mentality offers </span>
+            <span className="text-[#8e8e8e]">information</span>
+            <br />
+            <span className="text-[#8e8e8e]">and resources to help you manage</span>
+            <br />
+            <span className="text-[#8e8e8e]">
+              your <EyePill /> mental wellbeing.
+            </span>
+          </motion.h1>
+
+          {/* Search pill */}
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.15 }}
+            className="mt-8 md:mt-12 max-w-[420px]"
+          >
+            <div className="bg-white rounded-[6px] border border-black/[0.05] p-1 pl-4 flex items-center shadow-sm">
+              <input
+                type="text"
+                placeholder="Ask me anything..."
+                className="w-full bg-transparent text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none"
+              />
+              <button
+                type="button"
+                aria-label="Submit"
+                className="bg-[#1a1a1a] text-white w-9 h-9 rounded-full relative shrink-0"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  className="absolute inset-0 m-auto w-4 h-4"
+                >
+                  <path d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+
+      {/* Edge anchor — language switch, middle right */}
+      <div className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 z-20">
+        <button
+          type="button"
+          className="flex items-center gap-1.5 rounded-full bg-white/30 border border-white/50 backdrop-blur-md px-3.5 py-2 text-[11px] tracking-wide text-[#1a1a1a] shadow-sm hover:bg-white/50 transition-colors"
+        >
+          <span className="text-[#1a1a1a]/50">pl</span>
+          <span className="text-[#1a1a1a]/40">—</span>
+          <span className="font-medium">en</span>
+        </button>
+      </div>
+
+      {/* Edge anchor — bottom left */}
+      <div className="absolute bottom-5 left-5 md:left-8 z-20 text-[11px] tracking-wide text-[#1a1a1a]/70">
+        2024
+      </div>
+
+      {/* Edge anchor — bottom right */}
+      <div className="absolute bottom-5 right-5 md:right-8 z-20 text-[11px] tracking-wide text-[#1a1a1a]/70">
+        mental health tools
+      </div>
+    </section>
+  );
+}
