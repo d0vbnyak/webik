@@ -1,0 +1,6 @@
+{"id":"int-455b836b","kind":"field_change","created_at":"2026-06-11T02:23:58.704813Z","actor":"d0vbnya","issue_id":"WebIK-k74","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Done"}}
+{"id":"int-3ebe233f","kind":"field_change","created_at":"2026-06-11T02:23:59.1201299Z","actor":"d0vbnya","issue_id":"WebIK-7kv","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Done"}}
+{"id":"int-ae598ed3","kind":"field_change","created_at":"2026-06-11T02:23:59.5408549Z","actor":"d0vbnya","issue_id":"WebIK-9g0","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Done"}}
+{"id":"int-7385a5d2","kind":"field_change","created_at":"2026-06-11T02:23:59.9635909Z","actor":"d0vbnya","issue_id":"WebIK-1eu","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Done"}}
+{"id":"int-79772254","kind":"field_change","created_at":"2026-06-11T02:24:00.389027Z","actor":"d0vbnya","issue_id":"WebIK-y5r","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Done: build passed, visual verification via Playwright on desktop+mobile"}}
+{"id":"int-2389132b","kind":"field_change","created_at":"2026-06-11T02:24:00.8382947Z","actor":"d0vbnya","issue_id":"WebIK-a6h","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Done: landing page built and verified"}}

@@ -14,8 +14,8 @@ function EyePill() {
 export default function Hero() {
   return (
     <section className="relative min-h-[110vh] sm:min-h-[140vh] w-full flex flex-col items-center justify-start overflow-hidden bg-bg-base">
-      {/* Background video */}
-      <div className="absolute top-[15vh] sm:top-[20vh] left-0 w-full h-[95vh] sm:h-[120vh] z-0 pointer-events-none">
+      {/* Фоновое видео */}
+      <div className="absolute top-[34vh] sm:top-[20vh] left-0 w-full h-[76vh] sm:h-[120vh] z-0 pointer-events-none">
         <video
           autoPlay
           loop
@@ -27,26 +27,26 @@ export default function Hero() {
         <div className="absolute top-0 left-0 w-full h-24 sm:h-32 bg-gradient-to-b from-bg-base to-transparent"></div>
       </div>
 
-      {/* Hero content */}
+      {/* Контент */}
       <div className="max-w-7xl w-full mx-auto px-8 md:px-16 lg:px-20 relative z-10 grid grid-cols-12 gap-x-4 md:gap-x-8 pt-32 sm:pt-40 md:pt-44">
         <div className="col-span-12 md:col-span-10 md:col-start-2">
           <motion.h1
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            className="font-display font-medium tracking-tight text-[2.35rem] leading-[1.12] sm:text-5xl lg:text-6xl xl:text-[64px]"
+            className="font-display font-medium tracking-tight text-[2rem] leading-[1.14] sm:text-5xl lg:text-6xl xl:text-[64px]"
           >
-            <span className="text-[#1a1a1a]">Mentality offers </span>
-            <span className="text-[#8e8e8e]">information</span>
+            <span className="text-[#1a1a1a]">WebIK создаёт </span>
+            <span className="text-[#8e8e8e]">сайты,</span>
             <br />
-            <span className="text-[#8e8e8e]">and resources to help you manage</span>
+            <span className="text-[#8e8e8e]">ботов и AI-решения, которые</span>
             <br />
             <span className="text-[#8e8e8e]">
-              your <EyePill /> mental wellbeing.
+              двигают <EyePill /> ваш бизнес.
             </span>
           </motion.h1>
 
-          {/* Search pill */}
+          {/* Поисковая капсула */}
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
@@ -56,12 +56,12 @@ export default function Hero() {
             <div className="bg-white rounded-[6px] border border-black/[0.05] p-1 pl-4 flex items-center shadow-sm">
               <input
                 type="text"
-                placeholder="Ask me anything..."
+                placeholder="Опишите вашу задачу..."
                 className="w-full bg-transparent text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none"
               />
               <button
                 type="button"
-                aria-label="Submit"
+                aria-label="Отправить"
                 className="bg-[#1a1a1a] text-white w-9 h-9 rounded-full relative shrink-0"
               >
                 <svg
@@ -82,26 +82,26 @@ export default function Hero() {
         </div>
       </div>
 
-      {/* Edge anchor — language switch, middle right */}
-      <div className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 z-20">
+      {/* Якорь — переключатель языка, середина справа */}
+      <div className="absolute right-3 md:right-6 top-[68%] sm:top-1/2 -translate-y-1/2 z-20">
         <button
           type="button"
           className="flex items-center gap-1.5 rounded-full bg-white/30 border border-white/50 backdrop-blur-md px-3.5 py-2 text-[11px] tracking-wide text-[#1a1a1a] shadow-sm hover:bg-white/50 transition-colors"
         >
-          <span className="text-[#1a1a1a]/50">pl</span>
+          <span className="font-medium">ru</span>
           <span className="text-[#1a1a1a]/40">—</span>
-          <span className="font-medium">en</span>
+          <span className="text-[#1a1a1a]/50">en</span>
         </button>
       </div>
 
-      {/* Edge anchor — bottom left */}
+      {/* Якорь — низ слева */}
       <div className="absolute bottom-5 left-5 md:left-8 z-20 text-[11px] tracking-wide text-[#1a1a1a]/70">
-        2024
+        2026
       </div>
 
-      {/* Edge anchor — bottom right */}
+      {/* Якорь — низ справа */}
       <div className="absolute bottom-5 right-5 md:right-8 z-20 text-[11px] tracking-wide text-[#1a1a1a]/70">
-        mental health tools
+        веб-студия и AI-решения
       </div>
     </section>
   );

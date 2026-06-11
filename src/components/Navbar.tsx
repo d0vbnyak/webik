@@ -1,9 +1,15 @@
 import { useState } from "react";
+import { Link, NavLink } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 
-const NAV_LINKS = ["service", "patient resources", "about us", "education center"];
+const NAV_LINKS = [
+  { to: "/about", label: "о нас" },
+  { to: "/templates", label: "шаблоны" },
+  { to: "/capabilities", label: "возможности" },
+  { to: "/works", label: "другие работы" },
+];
 
-function CloverIcon({ className }: { className?: string }) {
+export function CloverIcon({ className }: { className?: string }) {
   return (
     <svg
       width="26"
@@ -22,53 +28,54 @@ function CloverIcon({ className }: { className?: string }) {
   );
 }
 
+const desktopLinkClass = ({ isActive }: { isActive: boolean }) =>
+  `text-xs lg:text-sm lowercase tracking-wide transition-colors whitespace-nowrap ${
+    isActive ? "text-[#1a1a1a] font-medium" : "text-[#1a1a1a]/70 hover:text-[#1a1a1a]"
+  }`;
+
 export default function Navbar() {
   const [open, setOpen] = useState(false);
 
   return (
     <header className="fixed top-0 left-0 w-full z-50 py-6 md:py-10 bg-gradient-to-b from-[#f1f1f1]/80 to-transparent backdrop-blur-[2px]">
       <div className="grid grid-cols-12 max-w-7xl mx-auto items-center px-8 md:px-16 lg:px-20 gap-x-4 md:gap-x-8">
-        {/* Left — brand */}
-        <a href="#" className="col-span-6 md:col-span-3 flex items-center gap-2.5">
+        {/* Слева — бренд */}
+        <Link to="/" className="col-span-6 md:col-span-3 flex items-center gap-2.5">
           <CloverIcon className="shrink-0" />
           <span className="font-display text-xl md:text-2xl font-medium tracking-tight text-[#1a1a1a]">
-            mėntality
+            WebIK
           </span>
-        </a>
+        </Link>
 
-        {/* Center — desktop links */}
+        {/* Центр — навигация (desktop) */}
         <nav className="hidden md:flex col-span-6 items-center justify-center gap-6 lg:gap-9">
           {NAV_LINKS.map((link) => (
-            <a
-              key={link}
-              href="#"
-              className="text-xs lg:text-sm lowercase tracking-wide text-[#1a1a1a]/70 hover:text-[#1a1a1a] transition-colors whitespace-nowrap"
-            >
-              {link}
-            </a>
+            <NavLink key={link.to} to={link.to} className={desktopLinkClass}>
+              {link.label}
+            </NavLink>
           ))}
         </nav>
 
-        {/* Right — actions */}
+        {/* Справа — действия */}
         <div className="col-span-6 md:col-span-3 flex items-center justify-end gap-3 md:gap-5">
           <a
-            href="#"
+            href="mailto:hello@webik.ru"
             className="hidden lg:inline-block text-xs lg:text-sm lowercase tracking-wide text-[#1a1a1a]/70 hover:text-[#1a1a1a] transition-colors whitespace-nowrap"
           >
-            find help
+            связаться
           </a>
           <a
-            href="#"
+            href="mailto:hello@webik.ru"
             className="hidden sm:inline-flex items-center gap-2 bg-[#1a1a1a] text-white text-xs md:text-sm lowercase rounded-full px-5 py-2.5 hover:bg-black transition-colors whitespace-nowrap"
           >
-            get started <span aria-hidden="true">→</span>
+            начать проект <span aria-hidden="true">→</span>
           </a>
 
-          {/* Animated hamburger — mobile only */}
+          {/* Анимированный гамбургер — mobile */}
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            aria-label="Toggle menu"
+            aria-label="Открыть меню"
             aria-expanded={open}
             className="md:hidden relative w-9 h-9 flex flex-col items-center justify-center gap-[5px]"
           >
@@ -86,7 +93,7 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile drawer */}
+      {/* Мобильное меню */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -98,29 +105,29 @@ export default function Navbar() {
           >
             <div className="rounded-2xl bg-white/85 backdrop-blur-xl border border-black/[0.05] shadow-lg p-6 flex flex-col gap-4">
               {NAV_LINKS.map((link) => (
-                <a
-                  key={link}
-                  href="#"
+                <NavLink
+                  key={link.to}
+                  to={link.to}
                   onClick={() => setOpen(false)}
                   className="text-sm lowercase tracking-wide text-[#1a1a1a]/80 hover:text-[#1a1a1a] transition-colors"
                 >
-                  {link}
-                </a>
+                  {link.label}
+                </NavLink>
               ))}
               <div className="h-px bg-black/[0.06]" />
               <a
-                href="#"
+                href="mailto:hello@webik.ru"
                 onClick={() => setOpen(false)}
                 className="text-sm lowercase tracking-wide text-[#1a1a1a]/80 hover:text-[#1a1a1a] transition-colors"
               >
-                find help
+                связаться
               </a>
               <a
-                href="#"
+                href="mailto:hello@webik.ru"
                 onClick={() => setOpen(false)}
                 className="inline-flex items-center justify-center gap-2 bg-[#1a1a1a] text-white text-sm lowercase rounded-full px-5 py-3"
               >
-                get started <span aria-hidden="true">→</span>
+                начать проект <span aria-hidden="true">→</span>
               </a>
             </div>
           </motion.div>
