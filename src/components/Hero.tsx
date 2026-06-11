@@ -5,8 +5,20 @@ const VIDEO_URL =
 
 function EyePill() {
   return (
-    <span className="w-[16px] md:w-[42px] lg:w-[62px] h-[16px] md:h-[28px] lg:h-[34px] border-[2px] border-[#1a1a1a] rounded-full inline-flex items-center justify-center align-middle mx-1 md:mx-2">
+    <span className="relative w-[16px] md:w-[42px] lg:w-[62px] h-[16px] md:h-[28px] lg:h-[34px] inline-flex items-center justify-center align-middle mx-1 md:mx-2">
+      {/* Точка — всегда на месте */}
       <span className="w-2 h-2 rounded-full bg-[#1a1a1a]" />
+      {/* Овал — ездит по горизонтали и отталкивается от точки:
+          easeIn к краю (разгон), easeOut после разворота (отскок) */}
+      <motion.span
+        animate={{ x: ["0%", "36%", "0%", "-36%", "0%"] }}
+        transition={{
+          duration: 2.8,
+          repeat: Infinity,
+          ease: ["easeIn", "easeOut", "easeIn", "easeOut"],
+        }}
+        className="absolute inset-0 border-[2px] border-[#1a1a1a] rounded-full"
+      />
     </span>
   );
 }
