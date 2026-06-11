@@ -2,10 +2,10 @@ import { motion } from "motion/react";
 import PageHeader from "../components/PageHeader";
 
 const STATS = [
-  { value: "120+", label: "реализованных проектов" },
+  { value: "20+", label: "реализованных проектов" },
   { value: "6 лет", label: "на рынке веб-разработки" },
-  { value: "40+", label: "клиентов на постоянной поддержке" },
-  { value: "12", label: "специалистов в команде" },
+  { value: "10", label: "клиентов на постоянной поддержке" },
+  { value: "4", label: "специалиста в команде" },
 ];
 
 const PRINCIPLES = [
