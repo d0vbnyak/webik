@@ -251,6 +251,57 @@ function ScrollPourHero() {
     return () => cancelAnimationFrame(raf);
   }, [hintOpacity, reduceMotion]);
 
+  // Кнопка «Налить кофе»: плавная авто-прокрутка через весь hero.
+  // Скролл сам и наливает видео (перемотка следует за позицией), и прокручивает текст.
+  const autoRaf = useRef(0);
+  const autoStop = useRef<() => void>(() => {});
+
+  // на размонтировании гасим возможную активную авто-прокрутку
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(autoRaf.current);
+      autoStop.current();
+    },
+    [],
+  );
+
+  const pourCoffee = () => {
+    const sec = sectionRef.current;
+    if (!sec) return;
+    cancelAnimationFrame(autoRaf.current);
+    autoStop.current();
+
+    const startY = window.scrollY;
+    const endY = sec.offsetTop + sec.offsetHeight - window.innerHeight;
+    const dist = endY - startY;
+    if (dist <= 4) return;
+
+    const duration = 8500; // ~длительность наливания
+    const t0 = performance.now();
+    const ease = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2; // easeInOutSine
+
+    // любой ручной ввод прерывает авто-прокрутку — пользователь снова у руля
+    const stop = () => {
+      cancelAnimationFrame(autoRaf.current);
+      window.removeEventListener("wheel", stop);
+      window.removeEventListener("touchstart", stop);
+      window.removeEventListener("keydown", stop);
+      autoStop.current = () => {};
+    };
+    autoStop.current = stop;
+    window.addEventListener("wheel", stop, { passive: true });
+    window.addEventListener("touchstart", stop, { passive: true });
+    window.addEventListener("keydown", stop);
+
+    const step = (now: number) => {
+      const p = Math.min((now - t0) / duration, 1);
+      window.scrollTo(0, startY + dist * ease(p));
+      if (p < 1) autoRaf.current = requestAnimationFrame(step);
+      else stop();
+    };
+    autoRaf.current = requestAnimationFrame(step);
+  };
+
   return (
     <div ref={sectionRef} className="relative bg-[#15100c]">
       {/* Прилипающий фон-видео со всеми оверлеями.
@@ -368,9 +419,20 @@ function ScrollPourHero() {
               <span className="italic" style={{ color: COFFEE.caramel }}>с любовью</span>
             </h1>
             <p className="mt-6 text-base sm:text-lg text-white/85 leading-relaxed max-w-md">
-              Свежая обжарка каждое утро и ручная заварка. Прокрутите вниз —
-              и мы нальём вам чашку.
+              Свежая обжарка каждое утро и ручная заварка. Нажмите «Налить кофе»
+              или прокрутите вниз — и мы нальём вам чашку.
             </p>
+            {!reduceMotion && (
+              <button
+                type="button"
+                onClick={pourCoffee}
+                className="mt-7 inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium text-[#15100c] shadow-lg shadow-black/20 transition-transform hover:scale-[1.03]"
+                style={{ backgroundColor: COFFEE.caramel }}
+              >
+                Налить кофе
+                <span aria-hidden="true" className="text-base leading-none">↓</span>
+              </button>
+            )}
           </div>
         </section>
 
