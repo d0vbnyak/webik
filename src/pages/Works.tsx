@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
 import PageHeader from "../components/PageHeader";
+import SectionHeading from "../components/SectionHeading";
 
 /* ---------- CSS/SVG-мокапы направлений ---------- */
 
@@ -256,10 +257,11 @@ export default function Works() {
                 <span className="inline-block text-[11px] lowercase tracking-widest bg-white border border-black/[0.05] rounded-full px-3 py-1 text-[#1a1a1a]/60">
                   {work.tag}
                 </span>
-                <h2 className="mt-4 font-display font-medium tracking-tight text-2xl sm:text-3xl lg:text-4xl">
-                  <span className="text-[#1a1a1a]">{work.title}</span>{" "}
-                  <span className="text-[#8e8e8e]">{work.accent}</span>
-                </h2>
+                <SectionHeading
+                  title={work.title}
+                  accent={work.accent}
+                  className="mt-4 text-2xl sm:text-3xl lg:text-4xl"
+                />
                 <p className="mt-4 text-sm md:text-base leading-relaxed text-[#1a1a1a]/60">
                   {work.text}
                 </p>

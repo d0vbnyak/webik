@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 
 const STICKERS = [
@@ -10,10 +10,22 @@ const STICKERS = [
 
 export default function DragBoard() {
   const boardRef = useRef<HTMLDivElement>(null);
+  // На тач-устройствах нативный drag перехватывает вертикальный скролл —
+  // отключаем перетаскивание, оставляя статичную демо-доску.
+  const [isTouch, setIsTouch] = useState(false);
+
+  useEffect(() => {
+    setIsTouch(
+      typeof window !== "undefined" &&
+        window.matchMedia("(pointer: coarse)").matches,
+    );
+  }, []);
 
   return (
     <div
       ref={boardRef}
+      role="group"
+      aria-label="Доска со стикерами, которые можно перетаскивать"
       className="relative h-[240px] rounded-xl bg-white border border-dashed border-black/15 overflow-hidden"
     >
       <span className="absolute top-3 left-3 text-[10px] lowercase tracking-wide text-[#1a1a1a]/40">
@@ -23,14 +35,16 @@ export default function DragBoard() {
         {STICKERS.map((s) => (
           <motion.div
             key={s.text}
-            drag
+            drag={isTouch ? false : true}
             dragConstraints={boardRef}
             dragElastic={0.15}
             whileDrag={{ scale: 1.12, zIndex: 10 }}
             whileHover={{ scale: 1.05 }}
             initial={{ rotate: s.rotate }}
             style={{ backgroundColor: s.color }}
-            className="w-16 h-16 rounded-2xl shadow-md flex items-center justify-center font-display font-medium text-sm text-[#1a1a1a] cursor-grab active:cursor-grabbing select-none"
+            className={`w-16 h-16 rounded-2xl shadow-md flex items-center justify-center font-display font-medium text-sm text-[#1a1a1a] select-none ${
+              isTouch ? "" : "cursor-grab active:cursor-grabbing touch-none"
+            }`}
           >
             {s.text}
           </motion.div>

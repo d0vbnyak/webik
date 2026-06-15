@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { motion } from "motion/react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { motion, useReducedMotion } from "motion/react";
 
 const CONTACT_EMAIL = "hello@webik.ru";
 
@@ -7,19 +7,26 @@ const VIDEO_URL =
   "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260603_132049_036591b8-6e92-4760-b94c-a7ea6eef315c.mp4";
 
 function EyePill() {
+  const reduceMotion = useReducedMotion();
+
   return (
-    <span className="relative w-[16px] md:w-[42px] lg:w-[62px] h-[16px] md:h-[28px] lg:h-[34px] inline-flex items-center justify-center align-middle mx-1 md:mx-2">
+    <span className="relative w-[24px] md:w-[42px] lg:w-[62px] h-[24px] md:h-[28px] lg:h-[34px] inline-flex items-center justify-center align-middle mx-1 md:mx-2">
       {/* Точка — всегда на месте */}
       <span className="w-2 h-2 rounded-full bg-[#1a1a1a]" />
       {/* Овал — ездит по горизонтали и отталкивается от точки:
-          easeIn к краю (разгон), easeOut после разворота (отскок) */}
+          easeIn к краю (разгон), easeOut после разворота (отскок).
+          При prefers-reduced-motion — остаётся неподвижным. */}
       <motion.span
-        animate={{ x: ["0%", "36%", "0%", "-36%", "0%"] }}
-        transition={{
-          duration: 2.8,
-          repeat: Infinity,
-          ease: ["easeIn", "easeOut", "easeIn", "easeOut"],
-        }}
+        animate={reduceMotion ? { x: "0%" } : { x: ["0%", "36%", "0%", "-36%", "0%"] }}
+        transition={
+          reduceMotion
+            ? { duration: 0 }
+            : {
+                duration: 2.8,
+                repeat: Infinity,
+                ease: ["easeIn", "easeOut", "easeIn", "easeOut"],
+              }
+        }
         className="absolute inset-0 border-[2px] border-[#1a1a1a] rounded-full"
       />
     </span>
@@ -28,6 +35,20 @@ function EyePill() {
 
 export default function Hero() {
   const [task, setTask] = useState("");
+  const reduceMotion = useReducedMotion();
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Уважаем prefers-reduced-motion: не автозапускаем фоновое видео и ставим на паузу
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (reduceMotion) {
+      video.pause();
+    } else {
+      // play() возвращает промис; игнорируем возможный AbortError при размонтировании
+      void video.play().catch(() => {});
+    }
+  }, [reduceMotion]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -39,12 +60,13 @@ export default function Hero() {
   };
 
   return (
-    <section className="relative min-h-[110vh] sm:min-h-[140vh] w-full flex flex-col items-center justify-start overflow-hidden bg-bg-base">
+    <section className="relative min-h-[100svh] sm:min-h-[140svh] w-full flex flex-col items-center justify-start overflow-hidden bg-bg-base">
       {/* Фоновое видео */}
       <div className="absolute top-[34vh] sm:top-[20vh] left-0 w-full h-[76vh] sm:h-[120vh] z-0 pointer-events-none">
         <video
-          autoPlay
-          loop
+          ref={videoRef}
+          autoPlay={!reduceMotion}
+          loop={!reduceMotion}
           muted
           playsInline
           className="w-full h-full object-cover opacity-100"
@@ -64,10 +86,11 @@ export default function Hero() {
           >
             <span className="text-[#1a1a1a]">WebIK создаёт </span>
             <span className="text-[#8e8e8e]">сайты,</span>
-            <br />
-            <span className="text-[#8e8e8e]">ботов и AI-решения, которые</span>
-            <br />
+            <br className="hidden sm:inline" />
+            <span className="text-[#8e8e8e]"> ботов и AI-решения, которые</span>
+            <br className="hidden sm:inline" />
             <span className="text-[#8e8e8e]">
+              {" "}
               двигают <EyePill /> ваш бизнес.
             </span>
           </motion.h1>

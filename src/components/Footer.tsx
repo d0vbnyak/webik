@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { CloverIcon } from "./Navbar";
+import Logo from "./Logo";
 
 const PAGES = [
   { to: "/about", label: "о нас" },
@@ -22,12 +22,7 @@ export default function Footer() {
     <footer className="relative z-10 bg-bg-base border-t border-black/[0.06]">
       <div className="max-w-7xl mx-auto px-8 md:px-16 lg:px-20 py-12 md:py-16 grid grid-cols-12 gap-y-10 gap-x-4 md:gap-x-8">
         <div className="col-span-12 md:col-span-5">
-          <Link to="/" className="inline-flex items-center gap-2.5">
-            <CloverIcon />
-            <span className="font-display text-xl font-medium tracking-tight text-[#1a1a1a]">
-              WebIK
-            </span>
-          </Link>
+          <Logo variant="white" />
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-[#1a1a1a]/60">
             Веб-студия полного цикла: сайты, дизайн, боты и AI-решения для
             вашего бизнеса.

@@ -48,7 +48,7 @@ export default function CatalogFilter() {
   );
 
   return (
-    <div className="flex flex-col gap-3 h-[280px]">
+    <div className="flex flex-col gap-3 min-h-[280px]">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex flex-wrap gap-1.5">
           {CATEGORIES.map((c) => {
@@ -56,7 +56,7 @@ export default function CatalogFilter() {
             return (
               <label
                 key={c}
-                className={`flex items-center gap-1.5 text-[11px] lowercase rounded-full px-2.5 py-1.5 border cursor-pointer transition-colors ${
+                className={`flex items-center gap-1.5 text-[11px] lowercase rounded-full px-2.5 py-1.5 border cursor-pointer transition-colors ring-brand-green has-[:focus-visible]:ring-2 ${
                   on
                     ? "bg-[#1a1a1a] text-white border-[#1a1a1a]"
                     : "bg-white text-[#1a1a1a]/70 border-black/[0.08] hover:border-black/20"
@@ -104,7 +104,7 @@ export default function CatalogFilter() {
       </div>
 
       <div className="flex-1 overflow-y-auto -mx-1 px-1">
-        <motion.div layout className="grid grid-cols-2 gap-2">
+        <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <AnimatePresence mode="popLayout">
             {filtered.map((p) => (
               <motion.div

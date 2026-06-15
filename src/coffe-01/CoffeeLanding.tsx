@@ -162,6 +162,8 @@ function WebIKBadge() {
 function ScrollPourHero() {
   const sectionRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Мобильное навигационное меню (бургер). Видно только на <md.
+  const [navOpen, setNavOpen] = useState(false);
   // Целевой прогресс 0..1 от скролла; время видео плавно догоняет его в rAF-цикле
   const targetProgress = useRef(0);
   // Мобильный режим: узкий экран ИЛИ сенсорное устройство (телефон в ландшафте).
@@ -265,6 +267,16 @@ function ScrollPourHero() {
     [],
   );
 
+  // Закрытие мобильного меню по Escape
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navOpen]);
+
   const pourCoffee = () => {
     const sec = sectionRef.current;
     if (!sec) return;
@@ -272,7 +284,9 @@ function ScrollPourHero() {
     autoStop.current();
 
     const startY = window.scrollY;
-    const endY = sec.offsetTop + sec.offsetHeight - window.innerHeight;
+    // bottom через getBoundingClientRect устойчив к появлению позиционированной обёртки
+    // (offsetTop меряется от offsetParent, а не от документа)
+    const endY = sec.getBoundingClientRect().bottom + window.scrollY - window.innerHeight;
     const dist = endY - startY;
     if (dist <= 4) return;
 
@@ -284,13 +298,15 @@ function ScrollPourHero() {
     const stop = () => {
       cancelAnimationFrame(autoRaf.current);
       window.removeEventListener("wheel", stop);
-      window.removeEventListener("touchstart", stop);
+      window.removeEventListener("touchmove", stop);
       window.removeEventListener("keydown", stop);
       autoStop.current = () => {};
     };
     autoStop.current = stop;
     window.addEventListener("wheel", stop, { passive: true });
-    window.addEventListener("touchstart", stop, { passive: true });
+    // touchmove (реальный жест скролла), а не touchstart — иначе авто-прокрутку
+    // рвёт любое касание экрана, даже без намерения скроллить
+    window.addEventListener("touchmove", stop, { passive: true });
     window.addEventListener("keydown", stop);
 
     const step = (now: number) => {
@@ -364,19 +380,99 @@ function ScrollPourHero() {
               aria-label="Навигация кофейни"
               className="hidden md:flex items-center gap-8 text-[13px] tracking-wide text-white/80"
             >
-              <a href="#menu" className="hover:text-white transition-colors">Меню</a>
-              <a href="#about" className="hover:text-white transition-colors">О нас</a>
-              <a href="#contact" className="hover:text-white transition-colors">Контакты</a>
+              <a href="#menu" className="rounded-sm hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c98a4b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#15100c]">Меню</a>
+              <a href="#about" className="rounded-sm hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c98a4b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#15100c]">О нас</a>
+              <a href="#contact" className="rounded-sm hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c98a4b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#15100c]">Контакты</a>
             </nav>
-            <a
-              href="#contact"
-              className="rounded-full px-4 py-2 text-[13px] font-medium text-[#15100c] transition-transform hover:scale-[1.03]"
-              style={{ backgroundColor: COFFEE.cream }}
-            >
-              Забронировать
-            </a>
+            <div className="flex items-center gap-2">
+              <a
+                href="#contact"
+                className="rounded-full px-4 py-2 text-[13px] font-medium text-[#15100c] transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c98a4b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#15100c]"
+                style={{ backgroundColor: COFFEE.cream }}
+              >
+                Забронировать
+              </a>
+              {/* Бургер: только мобильный (<md), тач-таргет 44×44 */}
+              <button
+                type="button"
+                onClick={() => setNavOpen(true)}
+                aria-label="Открыть меню"
+                aria-expanded={navOpen}
+                aria-controls="coffee-mobile-nav"
+                className="md:hidden inline-flex items-center justify-center w-11 h-11 rounded-full text-white/90 border border-white/15 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c98a4b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#15100c]"
+              >
+                <span aria-hidden="true" className="flex flex-col items-center justify-center gap-[5px]">
+                  <span className="block w-5 h-px bg-current" />
+                  <span className="block w-5 h-px bg-current" />
+                  <span className="block w-5 h-px bg-current" />
+                </span>
+              </button>
+            </div>
           </div>
         </header>
+
+        {/* Мобильное меню-overlay (бургер). Только <md. Закрытие: фон, ссылка, Escape */}
+        <AnimatePresence>
+          {navOpen && (
+            <motion.div
+              id="coffee-mobile-nav"
+              className="md:hidden fixed inset-0 z-50 pointer-events-auto"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* Затемнённый фон — клик закрывает */}
+              <button
+                type="button"
+                aria-label="Закрыть меню"
+                onClick={() => setNavOpen(false)}
+                className="absolute inset-0 w-full h-full bg-black/60 backdrop-blur-sm cursor-default"
+              />
+              {/* Drawer со ссылками */}
+              <motion.nav
+                aria-label="Мобильная навигация кофейни"
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={{ type: "tween", duration: 0.25, ease: "easeOut" }}
+                className="absolute top-0 right-0 h-full w-[78%] max-w-xs flex flex-col px-6 pt-6 shadow-2xl shadow-black/40 border-l border-white/10"
+                style={{ backgroundColor: COFFEE.bean }}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-serif text-xl tracking-wide" style={{ color: COFFEE.cream }}>
+                    BREW<span style={{ color: COFFEE.caramel }}>.</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setNavOpen(false)}
+                    aria-label="Закрыть меню"
+                    className="inline-flex items-center justify-center w-11 h-11 -mr-2 rounded-full text-2xl leading-none text-white/80 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c98a4b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#15100c]"
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                </div>
+                <div className="mt-8 flex flex-col">
+                  {[
+                    { href: "#menu", label: "Меню" },
+                    { href: "#about", label: "О нас" },
+                    { href: "#contact", label: "Контакты" },
+                  ].map((l) => (
+                    <a
+                      key={l.href}
+                      href={l.href}
+                      onClick={() => setNavOpen(false)}
+                      className="flex items-center min-h-[44px] py-2 font-serif text-2xl rounded-sm transition-colors hover:text-[#c98a4b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c98a4b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#15100c]"
+                      style={{ color: COFFEE.cream }}
+                    >
+                      {l.label}
+                    </a>
+                  ))}
+                </div>
+              </motion.nav>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Подсказка прокрутки — гаснет в начале скролла */}
         <motion.div
@@ -426,7 +522,7 @@ function ScrollPourHero() {
               <button
                 type="button"
                 onClick={pourCoffee}
-                className="mt-7 inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium text-[#15100c] shadow-lg shadow-black/20 transition-transform hover:scale-[1.03]"
+                className="mt-7 inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium text-[#15100c] shadow-lg shadow-black/20 transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c98a4b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#15100c]"
                 style={{ backgroundColor: COFFEE.caramel }}
               >
                 Налить кофе
@@ -480,14 +576,14 @@ function ScrollPourHero() {
             <div className="mt-9 flex flex-wrap items-center gap-4">
               <a
                 href="#menu"
-                className="rounded-full px-6 py-3 text-sm font-medium text-[#15100c] transition-transform hover:scale-[1.03]"
+                className="rounded-full px-6 py-3 text-sm font-medium text-[#15100c] transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c98a4b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#15100c]"
                 style={{ backgroundColor: COFFEE.caramel }}
               >
                 Смотреть меню
               </a>
               <a
                 href="#about"
-                className="rounded-full px-6 py-3 text-sm font-medium text-white/90 border border-white/25 hover:bg-white/10 transition-colors"
+                className="rounded-full px-6 py-3 text-sm font-medium text-white/90 border border-white/25 hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c98a4b] focus-visible:ring-offset-2 focus-visible:ring-offset-[#15100c]"
               >
                 О кофейне
               </a>

@@ -31,7 +31,8 @@ export default function ParticleField() {
     }));
 
     const mouse = { x: -1000, y: -1000 };
-    const onMove = (e: MouseEvent) => {
+    // pointer-события покрывают и мышь, и палец на сенсоре
+    const onMove = (e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
       mouse.x = e.clientX - rect.left;
       mouse.y = e.clientY - rect.top;
@@ -40,8 +41,11 @@ export default function ParticleField() {
       mouse.x = -1000;
       mouse.y = -1000;
     };
-    canvas.addEventListener("mousemove", onMove);
-    canvas.addEventListener("mouseleave", onLeave);
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerdown", onMove);
+    canvas.addEventListener("pointerleave", onLeave);
+    canvas.addEventListener("pointerup", onLeave);
+    canvas.addEventListener("pointercancel", onLeave);
     window.addEventListener("resize", resize);
 
     let raf = 0;
@@ -97,17 +101,21 @@ export default function ParticleField() {
 
     return () => {
       cancelAnimationFrame(raf);
-      canvas.removeEventListener("mousemove", onMove);
-      canvas.removeEventListener("mouseleave", onLeave);
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerdown", onMove);
+      canvas.removeEventListener("pointerleave", onLeave);
+      canvas.removeEventListener("pointerup", onLeave);
+      canvas.removeEventListener("pointercancel", onLeave);
       window.removeEventListener("resize", resize);
     };
   }, []);
 
   return (
     <div className="relative">
-      <canvas ref={canvasRef} className="w-full h-[240px] rounded-xl bg-white" />
+      {/* touch-pan-y: палец двигает частицы, но вертикальный скролл страницы сохраняется */}
+      <canvas ref={canvasRef} className="w-full h-[240px] rounded-xl bg-white touch-pan-y" />
       <span className="absolute bottom-3 left-3 text-[10px] lowercase tracking-wide text-[#1a1a1a]/40">
-        подвигайте курсором
+        проведите курсором или пальцем
       </span>
     </div>
   );

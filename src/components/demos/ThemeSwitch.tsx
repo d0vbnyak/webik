@@ -34,30 +34,34 @@ export default function ThemeSwitch() {
         </button>
       </div>
 
-      {/* Мини-профиль */}
+      {/* Логотип: для светлой темы — обычный, для тёмной — инверсный (плавный кроссфейд) */}
       <div className="mt-5 flex items-center gap-3">
+        <div className="relative h-8 w-[90px] shrink-0">
+          <img
+            src="/webik-logo.svg"
+            alt="WebIK"
+            draggable={false}
+            className={`absolute inset-0 h-8 w-auto select-none transition-opacity duration-500 ${
+              dark ? "opacity-0" : "opacity-100"
+            }`}
+          />
+          <img
+            src="/webik-logo-reversed.svg"
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+            className={`absolute inset-0 h-8 w-auto select-none transition-opacity duration-500 ${
+              dark ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        </div>
         <div
-          className={`w-11 h-11 rounded-full flex items-center justify-center font-display font-medium text-sm transition-colors duration-500 ${
-            dark ? "bg-brand-green text-[#1a1a1a]" : "bg-bg-base text-[#1a1a1a]"
+          className={`text-[11px] transition-colors duration-500 ${
+            dark ? "text-white/40" : "text-[#1a1a1a]/45"
           }`}
         >
-          ВК
-        </div>
-        <div>
-          <div
-            className={`text-sm font-medium transition-colors duration-500 ${
-              dark ? "text-white" : "text-[#1a1a1a]"
-            }`}
-          >
-            WebIK Studio
-          </div>
-          <div
-            className={`text-[11px] transition-colors duration-500 ${
-              dark ? "text-white/40" : "text-[#1a1a1a]/45"
-            }`}
-          >
-            дизайн-система с тёмной темой
-          </div>
+          дизайн-система
+          <br />с тёмной темой
         </div>
       </div>
 

@@ -35,7 +35,7 @@ function Counter({ target, suffix, label }: (typeof STATS)[number]) {
 
 export default function StatsCounter() {
   return (
-    <div className="grid grid-cols-3 gap-2.5 py-6">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 py-6">
       {STATS.map((stat) => (
         <Counter key={stat.label} {...stat} />
       ))}

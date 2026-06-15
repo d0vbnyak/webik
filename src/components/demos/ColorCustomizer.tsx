@@ -71,7 +71,7 @@ export default function ColorCustomizer() {
               className="group relative flex h-10 w-10 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#1a1a1a] focus-visible:ring-offset-2 focus-visible:ring-offset-bg-base"
             >
               <span
-                className={`block h-7 w-7 rounded-full transition-transform ${
+                className={`relative flex h-7 w-7 items-center justify-center rounded-full transition-transform ${
                   isActive
                     ? "scale-110 ring-2 ring-[#1a1a1a] ring-offset-2 ring-offset-bg-base"
                     : "group-hover:scale-105"
@@ -80,7 +80,23 @@ export default function ColorCustomizer() {
                   backgroundColor: v.swatch,
                   boxShadow: "inset 0 0 0 1px rgba(26,26,26,0.12)",
                 }}
-              />
+              >
+                {isActive && (
+                  // галочка с mix-blend-difference — контрастна на любом свотче
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 text-white mix-blend-difference"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={3}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </span>
             </button>
           );
         })}

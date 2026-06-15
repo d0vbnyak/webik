@@ -19,6 +19,7 @@ export default function ChatBot() {
   const replyIndex = useRef(0);
   const nextId = useRef(1);
   const listRef = useRef<HTMLDivElement>(null);
+  const replyTimer = useRef<number | undefined>(undefined);
 
   // Автопрокрутка ленты к последнему сообщению / индикатору печати
   useEffect(() => {
@@ -26,13 +27,18 @@ export default function ChatBot() {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, typing]);
 
+  // Чистим отложенный ответ бота при размонтировании
+  useEffect(() => {
+    return () => window.clearTimeout(replyTimer.current);
+  }, []);
+
   const send = () => {
     const text = value.trim();
     if (!text || typing) return;
     setValue("");
     setMessages((m) => [...m, { id: nextId.current++, from: "user", text }]);
     setTyping(true);
-    setTimeout(() => {
+    replyTimer.current = window.setTimeout(() => {
       const reply = REPLIES[replyIndex.current % REPLIES.length];
       replyIndex.current += 1;
       setMessages((m) => [...m, { id: nextId.current++, from: "bot", text: reply }]);
@@ -83,14 +89,16 @@ export default function ChatBot() {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
+          disabled={typing}
           placeholder="Напишите боту..."
-          className="w-full bg-transparent text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none"
+          className="w-full bg-transparent text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none disabled:opacity-50"
         />
         <button
           type="button"
           onClick={send}
+          disabled={typing || !value.trim()}
           aria-label="Отправить сообщение"
-          className="bg-[#1a1a1a] text-white w-7 h-7 rounded-full relative shrink-0"
+          className="bg-[#1a1a1a] text-white w-7 h-7 rounded-full relative shrink-0 transition-opacity disabled:opacity-30 disabled:pointer-events-none"
         >
           <svg
             viewBox="0 0 24 24"

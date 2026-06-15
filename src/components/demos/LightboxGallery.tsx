@@ -114,7 +114,7 @@ export default function LightboxGallery() {
                 else if (info.offset.x > 60) prev();
               }}
               onClick={(e) => e.stopPropagation()}
-              className="relative h-[176px] w-[300px] cursor-grab overflow-hidden rounded-xl shadow-2xl active:cursor-grabbing"
+              className="relative aspect-[300/176] h-auto w-[88%] max-w-[300px] cursor-grab touch-pan-y overflow-hidden rounded-xl shadow-2xl active:cursor-grabbing"
               style={{ background: grad(PHOTOS[open]) }}
             >
               <span className="absolute bottom-2 left-3 font-display text-sm font-medium text-[#1a1a1a]/70">

@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { Link } from "react-router";
 import Hero from "../components/Hero";
+import SectionHeading from "../components/SectionHeading";
 
 const SERVICES = [
   {
@@ -68,18 +69,15 @@ export default function Home() {
       <section className="relative z-10 bg-bg-base pb-24 md:pb-32">
         <div className="max-w-7xl mx-auto px-8 md:px-16 lg:px-20 grid grid-cols-12 gap-x-4 md:gap-x-8 pt-20 md:pt-28">
           <div className="col-span-12 md:col-span-10 md:col-start-2">
-            <motion.h2
+            <SectionHeading
+              title="Что мы делаем"
+              accent="— от лендинга до AI-колл-центра."
               initial={{ opacity: 0, y: 15 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-80px" }}
               transition={{ duration: 0.7 }}
-              className="font-display font-medium tracking-tight text-3xl sm:text-4xl lg:text-5xl"
-            >
-              <span className="text-[#1a1a1a]">Что мы делаем</span>{" "}
-              <span className="text-[#8e8e8e]">
-                — от лендинга до AI-колл-центра.
-              </span>
-            </motion.h2>
+              className="text-3xl sm:text-4xl lg:text-5xl"
+            />
 
             <div className="mt-12 md:mt-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
               {SERVICES.map((service, i) => (
@@ -89,7 +87,7 @@ export default function Home() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: "-40px" }}
                   transition={{ duration: 0.5, delay: (i % 4) * 0.08 }}
-                  className="group bg-white rounded-2xl border border-black/[0.05] p-6 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300"
+                  className="group bg-white rounded-2xl border border-black/[0.05] p-6 shadow-sm transition-all duration-300"
                 >
                   <div className="w-10 h-10 rounded-full bg-bg-base flex items-center justify-center group-hover:bg-brand-green transition-colors duration-300">
                     <svg
@@ -130,7 +128,7 @@ export default function Home() {
               </Link>
               <Link
                 to="/templates"
-                className="inline-flex items-center gap-2 text-sm lowercase text-[#1a1a1a]/70 hover:text-[#1a1a1a] transition-colors"
+                className="inline-flex items-center gap-2 px-6 py-3 text-sm lowercase text-[#1a1a1a]/70 hover:text-[#1a1a1a] transition-colors"
               >
                 выбрать шаблон сайта <span aria-hidden="true">→</span>
               </Link>

@@ -137,16 +137,16 @@ export default function Templates() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: "-40px" }}
                   transition={{ duration: 0.45, delay: (i % 4) * 0.06 }}
-                  className="group bg-white rounded-2xl border border-black/[0.05] p-3 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer"
+                  className="group bg-white rounded-2xl border border-black/[0.05] p-3 shadow-sm hover:shadow-md hover:-translate-y-1 active:shadow-md active:-translate-y-1 transition-all duration-300 cursor-pointer"
                 >
                   <div className="relative">
                     {tpl.image ? (
                       <div className="aspect-[4/3] rounded-xl overflow-hidden border border-black/[0.04]">
                         <img
                           src={tpl.image}
-                          alt=""
+                          alt={`Превью шаблона «${tpl.name}»`}
                           decoding="async"
-                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04] group-active:scale-[1.04]"
                         />
                       </div>
                     ) : (
@@ -171,7 +171,7 @@ export default function Templates() {
                     </div>
                     <span
                       aria-hidden="true"
-                      className="w-7 h-7 shrink-0 rounded-full bg-bg-base flex items-center justify-center text-[#1a1a1a] text-xs group-hover:bg-brand-green transition-colors duration-300"
+                      className="w-7 h-7 shrink-0 rounded-full bg-bg-base flex items-center justify-center text-[#1a1a1a] text-xs group-hover:bg-brand-green group-active:bg-brand-green transition-colors duration-300"
                     >
                       →
                     </span>

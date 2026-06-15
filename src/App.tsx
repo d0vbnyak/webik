@@ -8,6 +8,7 @@ import About from "./pages/About";
 import Templates from "./pages/Templates";
 import Capabilities from "./pages/Capabilities";
 import Works from "./pages/Works";
+import NotFound from "./pages/NotFound";
 
 // Лендинг-шаблон — самый крупный компонент, грузим лениво (не нужен на остальных страницах)
 const CoffeeLanding = lazy(() => import("./coffe-01/CoffeeLanding"));
@@ -24,6 +25,7 @@ function SiteLayout() {
           <Route path="/templates" element={<Templates />} />
           <Route path="/capabilities" element={<Capabilities />} />
           <Route path="/works" element={<Works />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       <Footer />

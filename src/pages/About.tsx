@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import PageHeader from "../components/PageHeader";
+import SectionHeading from "../components/SectionHeading";
 
 const STATS = [
   { value: "20+", label: "реализованных проектов" },
@@ -49,10 +50,10 @@ export default function About() {
         subtitle="Делаем сайты, ботов и нейросетевые решения, которые приносят заявки, а не просто красиво выглядят. Маленькая команда, большие проекты и никакой бюрократии."
       />
 
-      <div className="max-w-7xl mx-auto px-8 md:px-16 lg:px-20 grid grid-cols-12 gap-x-4 md:gap-x-8">
+      <div className="max-w-7xl mx-auto px-5 md:px-16 lg:px-20 grid grid-cols-12 gap-x-4 md:gap-x-8">
         <div className="col-span-12 md:col-span-10 md:col-start-2">
           {/* Цифры */}
-          <div className="mt-16 md:mt-20 grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+          <div className="mt-16 md:mt-20 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
             {STATS.map((stat, i) => (
               <motion.div
                 key={stat.label}
@@ -76,9 +77,11 @@ export default function About() {
             transition={{ duration: 0.6 }}
             className="mt-20 md:mt-28 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-start"
           >
-            <h2 className="font-display font-medium tracking-tight text-3xl sm:text-4xl text-[#1a1a1a]">
-              Почему <span className="text-[#8e8e8e]">мы?</span>
-            </h2>
+            <SectionHeading
+              title="Почему"
+              accent="мы?"
+              className="text-3xl sm:text-4xl"
+            />
             <div className="space-y-4 text-base leading-relaxed text-[#1a1a1a]/65">
               <p>
                 Мы начинали как небольшая команда верстальщиков, а выросли в
@@ -114,16 +117,15 @@ export default function About() {
           </div>
 
           {/* Команда */}
-          <motion.h2
+          <SectionHeading
+            title="Команда"
+            accent="без лишних звеньев."
             {...fadeUp}
             transition={{ duration: 0.6 }}
-            className="mt-20 md:mt-28 font-display font-medium tracking-tight text-3xl sm:text-4xl"
-          >
-            <span className="text-[#1a1a1a]">Команда</span>{" "}
-            <span className="text-[#8e8e8e]">без лишних звеньев.</span>
-          </motion.h2>
+            className="mt-20 md:mt-28 text-3xl sm:text-4xl"
+          />
 
-          <div className="mt-10 md:mt-12 grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+          <div className="mt-10 md:mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
             {TEAM.map((member, i) => (
               <motion.div
                 key={member.initials}
