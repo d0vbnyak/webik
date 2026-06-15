@@ -1,12 +1,29 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 type PreviewWindowProps = {
   url: string;
   children: ReactNode;
 };
 
-/** Рамка в виде браузерного окна для живых демо */
+/** Рамка в виде браузерного окна для живых демо.
+ *  Содержимое монтируется только когда окно попадает во вьюпорт
+ *  и размонтируется, уходя далеко за экран, — чтобы десятки демо
+ *  и их анимации/canvas-циклы не работали одновременно вне видимости. */
 export default function PreviewWindow({ url, children }: PreviewWindowProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => setVisible(entry.isIntersecting),
+      { rootMargin: "200px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   return (
     <div className="bg-white rounded-2xl border border-black/[0.05] shadow-sm overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-3 border-b border-black/[0.05]">
@@ -22,8 +39,11 @@ export default function PreviewWindow({ url, children }: PreviewWindowProps) {
         </div>
         <div className="w-10" aria-hidden="true" />
       </div>
-      <div className="p-4 md:p-5 bg-zinc-50/60 min-h-[260px] flex flex-col justify-center">
-        {children}
+      <div
+        ref={ref}
+        className="p-4 md:p-5 bg-zinc-50/60 min-h-[260px] flex flex-col justify-center"
+      >
+        {visible ? children : null}
       </div>
     </div>
   );

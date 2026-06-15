@@ -1,4 +1,7 @@
+import { useState, type FormEvent } from "react";
 import { motion } from "motion/react";
+
+const CONTACT_EMAIL = "hello@webik.ru";
 
 const VIDEO_URL =
   "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260603_132049_036591b8-6e92-4760-b94c-a7ea6eef315c.mp4";
@@ -24,6 +27,17 @@ function EyePill() {
 }
 
 export default function Hero() {
+  const [task, setTask] = useState("");
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    const text = task.trim();
+    if (!text) return;
+    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
+      "Заявка с сайта WebIK",
+    )}&body=${encodeURIComponent(text)}`;
+  };
+
   return (
     <section className="relative min-h-[110vh] sm:min-h-[140vh] w-full flex flex-col items-center justify-start overflow-hidden bg-bg-base">
       {/* Фоновое видео */}
@@ -65,14 +79,20 @@ export default function Hero() {
             transition={{ duration: 0.8, delay: 0.15 }}
             className="mt-8 md:mt-12 max-w-[420px]"
           >
-            <div className="bg-white rounded-[6px] border border-black/[0.05] p-1 pl-4 flex items-center shadow-sm">
+            <form
+              onSubmit={handleSubmit}
+              className="bg-white rounded-[6px] border border-black/[0.05] p-1 pl-4 flex items-center shadow-sm"
+            >
               <input
                 type="text"
+                value={task}
+                onChange={(e) => setTask(e.target.value)}
+                aria-label="Опишите вашу задачу"
                 placeholder="Опишите вашу задачу..."
                 className="w-full bg-transparent text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none"
               />
               <button
-                type="button"
+                type="submit"
                 aria-label="Отправить"
                 className="bg-[#1a1a1a] text-white w-9 h-9 rounded-full relative shrink-0"
               >
@@ -89,7 +109,7 @@ export default function Hero() {
                   <path d="M9 5l7 7-7 7" />
                 </svg>
               </button>
-            </div>
+            </form>
           </motion.div>
         </div>
       </div>
@@ -98,7 +118,10 @@ export default function Hero() {
       <div className="absolute right-3 md:right-6 top-[68%] sm:top-1/2 -translate-y-1/2 z-20">
         <button
           type="button"
-          className="flex items-center gap-1.5 rounded-full bg-white/30 border border-white/50 backdrop-blur-md px-3.5 py-2 text-[11px] tracking-wide text-[#1a1a1a] shadow-sm hover:bg-white/50 transition-colors"
+          disabled
+          aria-disabled="true"
+          title="Английская версия скоро"
+          className="flex items-center gap-1.5 rounded-full bg-white/30 border border-white/50 backdrop-blur-md px-3.5 py-2 text-[11px] tracking-wide text-[#1a1a1a] shadow-sm cursor-not-allowed"
         >
           <span className="font-medium">ru</span>
           <span className="text-[#1a1a1a]/40">—</span>

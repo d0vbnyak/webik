@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
 type Message = { id: number; from: "bot" | "user"; text: string };
@@ -18,6 +18,13 @@ export default function ChatBot() {
   const [typing, setTyping] = useState(false);
   const replyIndex = useRef(0);
   const nextId = useRef(1);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Автопрокрутка ленты к последнему сообщению / индикатору печати
+  useEffect(() => {
+    const el = listRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages, typing]);
 
   const send = () => {
     const text = value.trim();
@@ -35,7 +42,7 @@ export default function ChatBot() {
 
   return (
     <div className="flex flex-col h-[260px]">
-      <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+      <div ref={listRef} className="flex-1 overflow-y-auto space-y-2 pr-1">
         <AnimatePresence initial={false}>
           {messages.map((msg) => (
             <motion.div

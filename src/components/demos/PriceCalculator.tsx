@@ -44,7 +44,7 @@ export default function PriceCalculator() {
               key={opt.id}
               type="button"
               onClick={() => toggle(opt.id)}
-              className={`text-xs lowercase rounded-full px-3.5 py-2 border transition-colors ${
+              className={`inline-flex min-h-[40px] items-center text-xs lowercase rounded-full px-3.5 py-2.5 border transition-colors ${
                 active
                   ? "bg-[#1a1a1a] text-white border-[#1a1a1a]"
                   : "bg-white text-[#1a1a1a]/70 border-black/[0.08] hover:border-black/20"
