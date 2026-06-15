@@ -1,8 +1,23 @@
 import { motion } from "motion/react";
+import { Link } from "react-router";
 import PageHeader from "../components/PageHeader";
 
-const TEMPLATES = [
-  { name: "Лендинг кафе", category: "общепит" },
+type Tpl = {
+  name: string;
+  category: string;
+  ready?: boolean;
+  href?: string;
+  image?: string;
+};
+
+const TEMPLATES: Tpl[] = [
+  {
+    name: "Лендинг кафе",
+    category: "общепит",
+    ready: true,
+    href: "/templates/coffe-01",
+    image: "/coffe-01/preview.jpg?v=2",
+  },
   { name: "Интернет-магазин", category: "e-commerce" },
   { name: "Портфолио", category: "креатив" },
   { name: "Корпоративный сайт", category: "бизнес" },
@@ -109,45 +124,69 @@ export default function Templates() {
       <PageHeader
         title="Шаблоны"
         accent="вашего будущего сайта."
-        subtitle="20 готовых направлений: выбирайте основу — а мы адаптируем дизайн, тексты и функциональность под ваш бренд. Превью шаблонов скоро появятся."
+        subtitle="20 готовых направлений: выбирайте основу — а мы адаптируем дизайн, тексты и функциональность под ваш бренд. Первый шаблон уже готов — откройте «Лендинг кафе»."
       />
 
       <div className="max-w-7xl mx-auto px-8 md:px-16 lg:px-20 grid grid-cols-12 gap-x-4 md:gap-x-8">
         <div className="col-span-12 md:col-span-10 md:col-start-2">
           <div className="mt-14 md:mt-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
-            {TEMPLATES.map((tpl, i) => (
-              <motion.article
-                key={tpl.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-40px" }}
-                transition={{ duration: 0.45, delay: (i % 4) * 0.06 }}
-                className="group bg-white rounded-2xl border border-black/[0.05] p-3 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer"
-              >
-                <div className="relative">
-                  <SkeletonPreview variant={i % 4} accent={ACCENTS[i % ACCENTS.length]} />
-                  <span className="absolute top-2 right-2 text-[10px] lowercase tracking-wide bg-[#1a1a1a] text-white rounded-full px-2.5 py-1">
-                    скоро
-                  </span>
-                </div>
-                <div className="px-2 pt-3 pb-2 flex items-center justify-between gap-2">
-                  <div>
-                    <h3 className="font-display font-medium text-sm text-[#1a1a1a]">
-                      {tpl.name}
-                    </h3>
-                    <div className="mt-0.5 text-[11px] lowercase text-[#1a1a1a]/45">
-                      {tpl.category}
-                    </div>
+            {TEMPLATES.map((tpl, i) => {
+              const card = (
+                <motion.article
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ duration: 0.45, delay: (i % 4) * 0.06 }}
+                  className="group bg-white rounded-2xl border border-black/[0.05] p-3 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer"
+                >
+                  <div className="relative">
+                    {tpl.image ? (
+                      <div className="aspect-[4/3] rounded-xl overflow-hidden border border-black/[0.04]">
+                        <img
+                          src={tpl.image}
+                          alt=""
+                          decoding="async"
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                        />
+                      </div>
+                    ) : (
+                      <SkeletonPreview variant={i % 4} accent={ACCENTS[i % ACCENTS.length]} />
+                    )}
+                    <span
+                      className={`absolute top-2 right-2 text-[10px] lowercase tracking-wide rounded-full px-2.5 py-1 ${
+                        tpl.ready ? "bg-brand-green text-black font-medium" : "bg-[#1a1a1a] text-white"
+                      }`}
+                    >
+                      {tpl.ready ? "готово" : "скоро"}
+                    </span>
                   </div>
-                  <span
-                    aria-hidden="true"
-                    className="w-7 h-7 shrink-0 rounded-full bg-bg-base flex items-center justify-center text-[#1a1a1a] text-xs group-hover:bg-brand-green transition-colors duration-300"
-                  >
-                    →
-                  </span>
-                </div>
-              </motion.article>
-            ))}
+                  <div className="px-2 pt-3 pb-2 flex items-center justify-between gap-2">
+                    <div>
+                      <h3 className="font-display font-medium text-sm text-[#1a1a1a]">
+                        {tpl.name}
+                      </h3>
+                      <div className="mt-0.5 text-[11px] lowercase text-[#1a1a1a]/45">
+                        {tpl.category}
+                      </div>
+                    </div>
+                    <span
+                      aria-hidden="true"
+                      className="w-7 h-7 shrink-0 rounded-full bg-bg-base flex items-center justify-center text-[#1a1a1a] text-xs group-hover:bg-brand-green transition-colors duration-300"
+                    >
+                      →
+                    </span>
+                  </div>
+                </motion.article>
+              );
+
+              return tpl.href ? (
+                <Link key={tpl.name} to={tpl.href} className="block">
+                  {card}
+                </Link>
+              ) : (
+                <div key={tpl.name}>{card}</div>
+              );
+            })}
           </div>
         </div>
       </div>

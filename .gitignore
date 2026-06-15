@@ -3,6 +3,14 @@ dist
 *.local
 .DS_Store
 
+# Сырые исходники медиа (готовые лежат в public/coffe-01)
+/coffe-01/
+.playwright-mcp/
+
+# Тяжёлые видео шаблона — лежат на диске и попадают в сборку, но не в git
+# (репозиторий не раздувается; при переносе проекта видео копируются отдельно)
+public/coffe-01/*.mp4
+
 # Beads / Dolt files (added by bd init)
 .dolt/
 *.db
