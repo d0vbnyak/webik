@@ -30,6 +30,7 @@ const PHOTOS = {
   // Коллажи во весь экран в начале (hero)
   heroWide: { src: `/photo-01/hero-wide.jpg?v=${ASSET_V}`, label: "Коллаж работ", ratio: "16 / 9" },
   heroTall: { src: `/photo-01/hero-tall.jpg?v=${ASSET_V}`, label: "Коллаж работ", ratio: "9 / 16" },
+  intro: { src: `/photo-01/intro.jpg?v=${ASSET_V}`, label: "Плёночная камера на столе", ratio: "16 / 9" },
   // Работы — вертикальные 9:16, на мобайле во весь экран с текстом поверх
   flight: { src: `/photo-01/flight.jpg?v=${ASSET_V}`, label: "Полёт", ratio: "9 / 16" },
   greenery: { src: `/photo-01/greenery.jpg?v=${ASSET_V}`, label: "Среди зелени", ratio: "9 / 16" },
@@ -96,8 +97,6 @@ const PILL_BASE =
 const PILL_GHOST = `inline-flex ${PILL_BASE}`;
 const PILL_BASE_W =
   "items-center rounded-full border border-white/80 px-4 py-2 text-[15px] sm:text-base text-white transition-colors hover:bg-white hover:text-black";
-const PILL_FILLED_W =
-  "inline-flex items-center rounded-full bg-white px-4 py-2 text-[15px] sm:text-base text-black transition-colors hover:bg-white/85";
 
 /* Данные секций. desc — короткое описание, выводится прямо на фото. */
 const WORKS: { id: PhotoId; cat: string; title: string; desc: string; year: string }[] = [
@@ -287,29 +286,6 @@ export default function PhotoLanding() {
                 "linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 26%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.8) 100%)",
             }}
           />
-          {/* Навигация */}
-          <header className="absolute inset-x-0 top-0 z-20">
-            <div className={`${WRAP} flex items-center justify-between py-5 sm:py-7`}>
-              <span className="text-[13px] leading-[1.05] text-white sm:text-sm">
-                <span className="block">Артём</span>
-                <span className="block">Волков</span>
-              </span>
-              <nav className="flex items-center gap-2 sm:gap-3" aria-label="Разделы">
-                <button onClick={() => goto(NAV.work)} className={`hidden sm:inline-flex ${PILL_BASE_W}`}>
-                  Портфолио
-                </button>
-                <button onClick={() => goto(NAV.services)} className={`hidden md:inline-flex ${PILL_BASE_W}`}>
-                  Съёмки
-                </button>
-                <button onClick={() => goto(NAV.about)} className={`hidden md:inline-flex ${PILL_BASE_W}`}>
-                  О себе
-                </button>
-                <button onClick={() => goto(NAV.contact)} className={PILL_FILLED_W}>
-                  Связаться
-                </button>
-              </nav>
-            </div>
-          </header>
           {/* Имя */}
           <div className="absolute inset-x-0 bottom-0 z-10">
             <div className={`${WRAP} pb-14 sm:pb-20`}>
@@ -335,24 +311,35 @@ export default function PhotoLanding() {
           </div>
         </Panel>
 
-        {/* 1 — Вступление */}
-        <Panel>
-          <div className={`${WRAP} flex h-full flex-col justify-center`}>
+        {/* 1 — Вступление: фото камеры во весь экран, текст поверх */}
+        <Panel bg="#000000" dark>
+          <img
+            src={PHOTOS.intro.src!}
+            alt={PHOTOS.intro.label}
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover"
+            style={{ objectPosition: "30% 50%" }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(to right, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.45) 44%, rgba(0,0,0,0.05) 80%)" }}
+          />
+          <div className={`${WRAP} relative z-10 flex h-full flex-col justify-center`}>
             <Reveal>
               <span className="text-[14px] uppercase tracking-[0.16em]" style={{ color: RED }}>
                 Вступление
               </span>
               <p
-                className="mt-6 max-w-[20ch] text-[clamp(2rem,5.5vw,4.5rem)]"
+                className="mt-6 max-w-[20ch] text-[clamp(2rem,5.5vw,4.5rem)] text-white"
                 style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 1.02 }}
               >
                 Снимаю людей и то, что между ними.
               </p>
-              <p className="mt-7 max-w-[52ch] text-[18px] leading-[1.5] text-black/70 sm:text-[20px]">
+              <p className="mt-7 max-w-[46ch] text-[18px] leading-[1.5] text-white/75 sm:text-[20px]">
                 Взгляд, прикосновение, свет из окна. Без постановки — только настоящие
                 моменты, в которых виден человек.
               </p>
-              <button onClick={() => goto(NAV.work)} className={`mt-9 ${PILL_GHOST}`}>
+              <button onClick={() => goto(NAV.work)} className={`mt-9 inline-flex ${PILL_BASE_W}`}>
                 Смотреть работы →
               </button>
             </Reveal>
