@@ -20,25 +20,28 @@ const RED = "#ff0000";
 const FONT = '"Helvetica Neue", Helvetica, Arial, "Inter", sans-serif';
 
 /* ──────────────────────────────────────────────────────────────────────────
-   ФОТОГРАФИИ. Всё в одном месте — заменить заглушку на своё фото можно в ОДНУ
-   строку: впишите путь в поле `src`, например src: "/photo-01/fasad-01.jpg".
-   Пока src: null — на месте кадра рисуется аккуратная подписанная заглушка.
-   `ratio` — пропорции кадра (CSS aspect-ratio), `label` — что это за снимок.
+   ФОТОГРАФИИ. Всё в одном месте — заменить кадр можно в ОДНУ строку: меняете путь
+   в поле `src` (файл кладёте в public/photo-01/). Если поставить src: null —
+   вместо фото рисуется аккуратная подписанная заглушка. `ratio` — пропорции
+   кадра (CSS aspect-ratio), `label` — что это за снимок (идёт в alt).
+   ASSET_V — версия ассетов: меняйте при замене файла, чтобы браузер не показывал
+   старую картинку из кеша.
    ────────────────────────────────────────────────────────────────────────── */
 type Photo = { src: string | null; label: string; ratio: string };
 
+const ASSET_V = "1";
+
 const PHOTOS = {
-  heroTall: { src: null, label: "Фасад", ratio: "3 / 4" },
-  heroSquare: { src: null, label: "Деталь", ratio: "1 / 1" },
-  heroWide: { src: null, label: "Интерьер", ratio: "4 / 3" },
-  work1: { src: null, label: "Бетон и свет", ratio: "4 / 5" },
-  work2: { src: null, label: "Тихие пространства", ratio: "4 / 3" },
-  work3: { src: null, label: "Утро на рынке", ratio: "3 / 4" },
-  work4: { src: null, label: "Лица района", ratio: "1 / 1" },
-  work5: { src: null, label: "Геометрия фасадов", ratio: "4 / 5" },
-  work6: { src: null, label: "Город меняется", ratio: "4 / 3" },
-  featured: { src: null, label: "Город после дождя", ratio: "4 / 3" },
-  portrait: { src: null, label: "Портрет фотографа", ratio: "4 / 5" },
+  // Коллажи во весь экран в начале лендинга
+  heroWide: { src: `/photo-01/hero-wide.jpg?v=${ASSET_V}`, label: "Коллаж работ", ratio: "16 / 9" },
+  heroTall: { src: `/photo-01/hero-tall.jpg?v=${ASSET_V}`, label: "Коллаж работ", ratio: "9 / 16" },
+  // Портфолио
+  workDance: { src: `/photo-01/work-dance.jpg?v=${ASSET_V}`, label: "Полёт", ratio: "4 / 5" },
+  workPortrait: { src: `/photo-01/work-portrait.jpg?v=${ASSET_V}`, label: "Тёплый свет", ratio: "4 / 5" },
+  workEye: { src: `/photo-01/work-eye.jpg?v=${ASSET_V}`, label: "Взгляд", ratio: "1 / 1" },
+  workWindow: { src: `/photo-01/work-window.jpg?v=${ASSET_V}`, label: "На рассвете", ratio: "4 / 5" },
+  // О фотографе
+  about: { src: `/photo-01/about.jpg?v=${ASSET_V}`, label: "Портрет фотографа", ratio: "4 / 5" },
 } satisfies Record<string, Photo>;
 
 type PhotoId = keyof typeof PHOTOS;
@@ -126,27 +129,27 @@ const WRAP = "mx-auto w-full max-w-[1200px] px-5 sm:px-8 lg:px-10";
 const PILL_BASE =
   "items-center rounded-full border border-black px-4 py-2 text-[15px] sm:text-base transition-colors hover:bg-black hover:text-white";
 const PILL_GHOST = `inline-flex ${PILL_BASE}`;
-const PILL_FILLED =
-  "inline-flex items-center rounded-full bg-black px-4 py-2 text-[15px] sm:text-base text-white transition-colors hover:bg-[#222]";
+
+// Белые варианты пилюль — для навигации поверх фото-hero
+const PILL_BASE_W =
+  "items-center rounded-full border border-white/80 px-4 py-2 text-[15px] sm:text-base text-white transition-colors hover:bg-white hover:text-black";
+const PILL_FILLED_W =
+  "inline-flex items-center rounded-full bg-white px-4 py-2 text-[15px] sm:text-base text-black transition-colors hover:bg-white/85";
 
 /* Данные секций */
 const WORKS: { id: PhotoId; cat: string; title: string; year: string }[] = [
-  { id: "work1", cat: "Архитектура", title: "Бетон и свет", year: "2025" },
-  { id: "work2", cat: "Интерьеры", title: "Тихие пространства", year: "2025" },
-  { id: "work3", cat: "Репортаж", title: "Утро на рынке", year: "2024" },
-  { id: "work4", cat: "Портрет", title: "Лица района", year: "2024" },
-  { id: "work5", cat: "Архитектура", title: "Геометрия фасадов", year: "2023" },
-  { id: "work6", cat: "Документ", title: "Город меняется", year: "2023" },
+  { id: "workDance", cat: "Движение", title: "Полёт", year: "2025" },
+  { id: "workPortrait", cat: "Портрет", title: "Тёплый свет", year: "2025" },
+  { id: "workEye", cat: "Деталь", title: "Взгляд", year: "2024" },
+  { id: "workWindow", cat: "История", title: "На рассвете", year: "2024" },
 ];
 
 // Раскладка портфолио: чередуем широкие и узкие колонки → асимметрия (десктоп)
 const WORK_SPAN = [
   "sm:col-span-7",
-  "sm:col-span-5 sm:mt-16",
+  "sm:col-span-5 sm:mt-20",
   "sm:col-span-5",
-  "sm:col-span-7 sm:mt-16",
-  "sm:col-span-6",
-  "sm:col-span-6 sm:mt-16",
+  "sm:col-span-7 sm:mt-20",
 ];
 
 const SERVICES = [
@@ -156,19 +159,19 @@ const SERVICES = [
     price: "от 12 000 ₽",
   },
   {
-    title: "Архитектура и интерьеры",
-    desc: "Для бюро, девелоперов и изданий",
-    price: "от 25 000 ₽",
-  },
-  {
-    title: "Репортаж и события",
-    desc: "Конференции, открытия, городские истории",
+    title: "Love-story и пары",
+    desc: "Съёмка-прогулка вашей истории — дома или на улицах города",
     price: "от 18 000 ₽",
   },
   {
-    title: "Предметная съёмка",
-    desc: "Каталоги, лукбуки, карточки товаров",
-    price: "от 15 000 ₽",
+    title: "Семейная съёмка",
+    desc: "Тёплые кадры о близких, без постановки и натянутых улыбок",
+    price: "от 16 000 ₽",
+  },
+  {
+    title: "Репортаж и события",
+    desc: "Свадьбы, концерты, городские истории",
+    price: "договорная",
   },
 ];
 
@@ -194,100 +197,72 @@ export default function PhotoLanding() {
       style={{ backgroundColor: PAPER, color: INK, fontFamily: FONT }}
       className="min-h-screen antialiased selection:bg-black selection:text-white"
     >
-      {/* ── Шапка: не липкая, логотип-имя слева, пилюли справа ── */}
-      <header className="relative z-20">
-        <div className={`${WRAP} flex items-center justify-between py-5 sm:py-7`}>
-          <a href="#top" className="text-[13px] leading-[1.05] sm:text-sm">
-            <span className="block">Артём</span>
-            <span className="block">Волков</span>
-          </a>
-          <nav className="flex items-center gap-2 sm:gap-3" aria-label="Разделы">
-            <a href="#work" className={`hidden sm:inline-flex ${PILL_BASE}`}>
-              Портфолио
-            </a>
-            <a href="#services" className={`hidden md:inline-flex ${PILL_BASE}`}>
-              Съёмки
-            </a>
-            <a href="#about" className={`hidden md:inline-flex ${PILL_BASE}`}>
-              О себе
-            </a>
-            <a href="#contact" className={PILL_FILLED}>
-              Связаться
-            </a>
-          </nav>
-        </div>
-      </header>
+      {/* ── Hero: полноэкранный коллаж работ ── */}
+      <section className="relative h-[100svh] min-h-[560px] w-full overflow-hidden bg-black">
+        {/* Коллаж: широкий 16:9 на десктопе/планшете, вертикальный 9:16 на телефоне */}
+        <img
+          src={PHOTOS.heroWide.src!}
+          alt="Коллаж работ фотографа Артёма Волкова"
+          decoding="async"
+          className="absolute inset-0 hidden h-full w-full object-cover sm:block"
+        />
+        <img
+          src={PHOTOS.heroTall.src!}
+          alt="Коллаж работ фотографа Артёма Волкова"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover sm:hidden"
+        />
+        {/* Затемнение по краям — только ради читаемости текста (фото в центре чистое) */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 26%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.78) 100%)",
+          }}
+        />
 
-      {/* ── Hero: типографическая инсталляция ── */}
-      <section className={`${WRAP} pb-10 pt-4 sm:pt-8`}>
-        {/* Мобильная версия — столбик, без поворота */}
-        <div className="lg:hidden">
-          <h1 style={{ fontWeight: 400 }} className="leading-[0.9]">
-            <span
-              className="block"
-              style={{ fontSize: "clamp(3.4rem, 20vw, 7rem)", letterSpacing: "-0.04em" }}
-            >
-              Артём
-            </span>
-            <span
-              className="block"
-              style={{ fontSize: "clamp(3.4rem, 20vw, 7rem)", letterSpacing: "-0.04em" }}
-            >
-              Волков
-            </span>
-          </h1>
-          <p className="mt-5 max-w-[34ch] text-[18px] leading-[1.31]">
-            Документальная и архитектурная фотография. Москва и не только.
-          </p>
-          <div className="mt-8 grid grid-cols-2 gap-3">
-            <Frame id="heroTall" />
-            <Frame id="heroSquare" className="mt-10" />
+        {/* Навигация поверх фото */}
+        <header className="absolute inset-x-0 top-0 z-20">
+          <div className={`${WRAP} flex items-center justify-between py-5 sm:py-7`}>
+            <a href="#top" className="text-[13px] leading-[1.05] text-white sm:text-sm">
+              <span className="block">Артём</span>
+              <span className="block">Волков</span>
+            </a>
+            <nav className="flex items-center gap-2 sm:gap-3" aria-label="Разделы">
+              <a href="#work" className={`hidden sm:inline-flex ${PILL_BASE_W}`}>
+                Портфолио
+              </a>
+              <a href="#services" className={`hidden md:inline-flex ${PILL_BASE_W}`}>
+                Съёмки
+              </a>
+              <a href="#about" className={`hidden md:inline-flex ${PILL_BASE_W}`}>
+                О себе
+              </a>
+              <a href="#contact" className={PILL_FILLED_W}>
+                Связаться
+              </a>
+            </nav>
           </div>
-          <div className="mt-3">
-            <Frame id="heroWide" />
-          </div>
-        </div>
+        </header>
 
-        {/* Десктоп — асимметрия + слово, повёрнутое на бок */}
-        <div className="hidden min-h-[82vh] lg:block">
-          <div className="flex items-start justify-between gap-6">
-            <div className="flex-1">
-              <h1
-                style={{
-                  fontWeight: 400,
-                  fontSize: "clamp(5rem, 12vw, 11rem)",
-                  letterSpacing: "-0.05em",
-                  lineHeight: 0.9,
-                }}
-              >
-                Артём
-              </h1>
-              <p className="mt-6 max-w-[40ch] text-[19px] leading-[1.31]">
-                Документальная и архитектурная фотография. Снимаю пространства,
-                фасады и людей в их среде.
-              </p>
-              {/* Кадры вразброс — лесенкой, как коллаж в референсе */}
-              <div className="mt-12 flex items-start gap-6">
-                <Frame id="heroTall" className="w-[280px]" />
-                <Frame id="heroSquare" className="mt-28 w-[200px]" />
-                <Frame id="heroWide" className="mt-52 w-[300px]" />
-              </div>
-            </div>
-            {/* Повёрнутое слово: writing-mode сам резервирует высоту — устойчиво */}
-            <div className="shrink-0 pt-2">
-              <span
-                style={{
-                  writingMode: "vertical-rl",
-                  fontWeight: 400,
-                  fontSize: "clamp(5rem, 12vw, 11rem)",
-                  letterSpacing: "-0.05em",
-                  lineHeight: 0.9,
-                }}
-                className="block"
-              >
-                Волков
-              </span>
-            </div>
+        {/* Имя — крупно по нижнему краю */}
+        <div className="absolute inset-x-0 bottom-0 z-10">
+          <div className={`${WRAP} pb-10 sm:pb-16`}>
+            <span className="text-[13px] uppercase tracking-[0.2em] text-white/85">
+              Фотограф · портрет и истории
+            </span>
+            <h1
+              className="mt-3 text-white"
+              style={{
+                fontWeight: 400,
+                fontSize: "clamp(3.6rem, 13vw, 11rem)",
+                letterSpacing: "-0.04em",
+                lineHeight: 0.88,
+              }}
+            >
+              <span className="block">Артём</span>
+              <span className="block">Волков</span>
+            </h1>
           </div>
         </div>
       </section>
@@ -296,8 +271,8 @@ export default function PhotoLanding() {
       <section className={`${WRAP} py-16 sm:py-24`}>
         <Reveal>
           <p className="max-w-[620px] text-[20px] leading-[1.4] tracking-[-0.01em] sm:text-[23px]">
-            Без постановки и лишнего глянца — только свет, форма и момент. Каждая
-            серия для меня документ места и времени, а не каталог красивых кадров.
+            Снимаю людей и то, что между ними: взгляд, прикосновение, свет из окна.
+            Без постановки — только настоящие моменты, в которых виден человек.
           </p>
           <a href="#work" className={`mt-8 ${PILL_GHOST}`}>
             Смотреть портфолио
@@ -314,7 +289,7 @@ export default function PhotoLanding() {
           >
             Избранные работы
           </h2>
-          <span className="text-[14px] text-[#8c8c8c]">01 — 06</span>
+          <span className="text-[14px] text-[#8c8c8c]">01 — 04</span>
         </Reveal>
 
         <div className="grid grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-12 sm:gap-y-16">
@@ -343,36 +318,27 @@ export default function PhotoLanding() {
         </div>
       </section>
 
-      {/* ── Избранная серия: инвертированная чёрная полоса ── */}
+      {/* ── Манифест: инвертированная чёрная полоса ── */}
       <section className="bg-black text-white">
-        <div className={`${WRAP} grid items-center gap-10 py-20 sm:py-28 lg:grid-cols-2 lg:gap-16`}>
+        <div className={`${WRAP} py-20 sm:py-32`}>
           <Reveal>
-            <span
-              className="text-[14px] uppercase tracking-[0.1em]"
-              style={{ color: RED }}
-            >
-              Серия
+            <span className="text-[14px] uppercase tracking-[0.1em]" style={{ color: RED }}>
+              Подход
             </span>
             <h2
-              style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.95 }}
-              className="mt-4 text-[44px] sm:text-[64px]"
+              style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.98 }}
+              className="mt-5 max-w-[16ch] text-[40px] sm:text-[72px]"
             >
-              Город после дождя
+              Снимаю не лица, а то, что за ними.
             </h2>
-            <p className="mt-6 max-w-[46ch] text-[18px] leading-[1.4] text-white/70">
-              Полгода я возвращался на одни и те же улицы после дождя, чтобы поймать,
-              как город отражается сам в себе. 24 кадра о свете, который бывает только
-              мокрым вечером.
+            <p className="mt-8 max-w-[52ch] text-[18px] leading-[1.5] text-white/70">
+              Хороший кадр случается, когда человек забывает про камеру. Поэтому я не
+              командую «улыбнитесь» — я жду. Разговариваю, гуляю, ловлю свет и паузу
+              между словами. То, что остаётся, и есть портрет.
             </p>
-            <a
-              href="#contact"
-              className="mt-8 inline-flex items-center rounded-full border border-white px-4 py-2 text-[15px] transition-colors hover:bg-white hover:text-black sm:text-base"
-            >
-              Смотреть серию — 24 кадра
+            <a href="#about" className={`mt-10 inline-flex ${PILL_BASE_W}`}>
+              Как я работаю
             </a>
-          </Reveal>
-          <Reveal delay={0.08}>
-            <Frame id="featured" />
           </Reveal>
         </div>
       </section>
@@ -418,7 +384,7 @@ export default function PhotoLanding() {
       <section id="about" className={`${WRAP} scroll-mt-8 py-20 sm:py-28`}>
         <div className="grid items-start gap-10 lg:grid-cols-[1fr_1.2fr] lg:gap-16">
           <Reveal>
-            <Frame id="portrait" />
+            <Frame id="about" />
           </Reveal>
           <Reveal delay={0.08}>
             <span className="text-[14px] uppercase tracking-[0.1em]" style={{ color: RED }}>
@@ -432,14 +398,13 @@ export default function PhotoLanding() {
             </h2>
             <div className="mt-6 max-w-[52ch] space-y-4 text-[18px] leading-[1.4] text-black/80">
               <p>
-                Фотограф из Москвы. Снимаю с 2015 года: начинал с уличной
-                документалистики, сейчас работаю с архитектурными бюро, изданиями и
-                брендами.
+                Фотограф из Москвы. Снимаю людей с 2015 года: портреты, пары, семьи и
+                те тихие моменты, ради которых стоит остановить время.
               </p>
               <p>
-                Верю, что хорошая фотография не приукрашивает реальность, а помогает
-                её увидеть. Снимаю на плёнку и цифру, монтирую сам, держу серию
-                цельной от первого кадра до печати.
+                Верю, что хорошая фотография не приукрашивает человека, а помогает его
+                разглядеть. Снимаю на плёнку и цифру, обрабатываю сам, держу серию
+                цельной — от первого кадра до печати.
               </p>
             </div>
             <div className="mt-10 flex gap-10">
