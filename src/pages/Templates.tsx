@@ -37,7 +37,7 @@ const TEMPLATES: Tpl[] = [
     category: "креатив",
     ready: true,
     href: "/templates/photo-01",
-    image: "/photo-01/preview.jpg?v=2",
+    image: "/photo-01/preview.jpg?v=3",
   },
   { name: "Ресторан", category: "общепит" },
   { name: "IT-стартап", category: "технологии" },

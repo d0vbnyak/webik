@@ -24,7 +24,7 @@ const FONT = '"Helvetica Neue", Helvetica, Arial, "Inter", sans-serif';
    ────────────────────────────────────────────────────────────────────────── */
 type Photo = { src: string | null; label: string; ratio: string };
 
-const ASSET_V = "1";
+const ASSET_V = "2";
 
 const PHOTOS = {
   // Коллажи во весь экран в начале (hero)
