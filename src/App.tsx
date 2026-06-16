@@ -13,6 +13,8 @@ import NotFound from "./pages/NotFound";
 // Лендинги-шаблоны — крупные компоненты, грузим лениво (не нужны на остальных страницах)
 const CoffeeLanding = lazy(() => import("./coffe-01/CoffeeLanding"));
 const PhotoLanding = lazy(() => import("./photo-01/PhotoLanding"));
+// Закрытая админ-панель — отдельный раздел, грузим лениво (на публичный сайт не влияет)
+const AdminApp = lazy(() => import("./admin/AdminApp"));
 
 /** Основной сайт WebIK — с общим navbar и footer */
 function SiteLayout() {
@@ -54,6 +56,15 @@ export default function App() {
           element={
             <Suspense fallback={<div className="min-h-screen bg-white" />}>
               <PhotoLanding />
+            </Suspense>
+          }
+        />
+        {/* Закрытая админ-панель — тёмная, со своей навигацией, без общего лейаута */}
+        <Route
+          path="/admin/*"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
+              <AdminApp />
             </Suspense>
           }
         />
