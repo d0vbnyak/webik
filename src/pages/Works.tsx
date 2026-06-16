@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import type { ReactNode } from "react";
 import PageHeader from "../components/PageHeader";
 import SectionHeading from "../components/SectionHeading";
+import AiCapabilities from "../components/AiCapabilities";
 
 /* ---------- CSS/SVG-мокапы направлений ---------- */
 
@@ -237,7 +238,7 @@ export default function Works() {
       <PageHeader
         title="Другие работы"
         accent="— за пределами сайтов."
-        subtitle="Боты, продвижение и нейросети: четыре направления, которые усиливают ваш сайт и разгружают команду."
+        subtitle="Боты, продвижение и нейросети — четыре флагманских направления и каталог из 30 готовых AI-решений для контента, продаж и рутины."
       />
 
       <div className="max-w-7xl mx-auto px-8 md:px-16 lg:px-20 grid grid-cols-12 gap-x-4 md:gap-x-8">
@@ -283,6 +284,9 @@ export default function Works() {
               </div>
             </motion.article>
           ))}
+
+          {/* Каталог из 30 AI-возможностей */}
+          <AiCapabilities />
         </div>
       </div>
     </section>
