@@ -27,12 +27,17 @@ type Photo = { src: string | null; label: string; ratio: string };
 const ASSET_V = "1";
 
 const PHOTOS = {
+  // Коллажи во весь экран в начале (hero)
   heroWide: { src: `/photo-01/hero-wide.jpg?v=${ASSET_V}`, label: "Коллаж работ", ratio: "16 / 9" },
   heroTall: { src: `/photo-01/hero-tall.jpg?v=${ASSET_V}`, label: "Коллаж работ", ratio: "9 / 16" },
-  workDance: { src: `/photo-01/work-dance.jpg?v=${ASSET_V}`, label: "Полёт", ratio: "4 / 5" },
-  workPortrait: { src: `/photo-01/work-portrait.jpg?v=${ASSET_V}`, label: "Тёплый свет", ratio: "4 / 5" },
-  workEye: { src: `/photo-01/work-eye.jpg?v=${ASSET_V}`, label: "Взгляд", ratio: "1 / 1" },
-  workWindow: { src: `/photo-01/work-window.jpg?v=${ASSET_V}`, label: "На рассвете", ratio: "4 / 5" },
+  // Работы — вертикальные 9:16, на мобайле во весь экран с текстом поверх
+  flight: { src: `/photo-01/flight.jpg?v=${ASSET_V}`, label: "Полёт", ratio: "9 / 16" },
+  greenery: { src: `/photo-01/greenery.jpg?v=${ASSET_V}`, label: "Среди зелени", ratio: "9 / 16" },
+  character: { src: `/photo-01/character.jpg?v=${ASSET_V}`, label: "Шляпа", ratio: "9 / 16" },
+  rain: { src: `/photo-01/rain.jpg?v=${ASSET_V}`, label: "Город в каплях", ratio: "9 / 16" },
+  gaze: { src: `/photo-01/gaze.jpg?v=${ASSET_V}`, label: "Взгляд", ratio: "9 / 16" },
+  evening: { src: `/photo-01/evening.jpg?v=${ASSET_V}`, label: "Вечер за книгой", ratio: "9 / 16" },
+  // О фотографе
   about: { src: `/photo-01/about.jpg?v=${ASSET_V}`, label: "Портрет фотографа", ratio: "4 / 5" },
 } satisfies Record<string, Photo>;
 
@@ -94,12 +99,14 @@ const PILL_BASE_W =
 const PILL_FILLED_W =
   "inline-flex items-center rounded-full bg-white px-4 py-2 text-[15px] sm:text-base text-black transition-colors hover:bg-white/85";
 
-/* Данные секций */
-const WORKS: { id: PhotoId; cat: string; title: string; year: string }[] = [
-  { id: "workDance", cat: "Движение", title: "Полёт", year: "2025" },
-  { id: "workPortrait", cat: "Портрет", title: "Тёплый свет", year: "2025" },
-  { id: "workEye", cat: "Деталь", title: "Взгляд", year: "2024" },
-  { id: "workWindow", cat: "История", title: "На рассвете", year: "2024" },
+/* Данные секций. desc — короткое описание, выводится прямо на фото. */
+const WORKS: { id: PhotoId; cat: string; title: string; desc: string; year: string }[] = [
+  { id: "flight", cat: "Движение", title: "Полёт", desc: "Свет, прыжок и доля секунды между ними.", year: "2025" },
+  { id: "greenery", cat: "Портрет", title: "Среди зелени", desc: "Портрет в оранжерее, утренний свет сквозь листья.", year: "2025" },
+  { id: "character", cat: "Характер", title: "Шляпа", desc: "Фактуры, руки и жест — портрет без лица.", year: "2024" },
+  { id: "rain", cat: "История", title: "Город в каплях", desc: "Силуэт за мокрым стеклом и огни ночного города.", year: "2024" },
+  { id: "gaze", cat: "Портрет", title: "Взгляд", desc: "Тёплый контровый свет и дым в кадре.", year: "2024" },
+  { id: "evening", cat: "История", title: "Вечер за книгой", desc: "Тихий час при свете настольной лампы.", year: "2023" },
 ];
 
 const SERVICES = [
@@ -116,14 +123,16 @@ const CONTACTS = [
 ];
 
 // Индексы панелей (для навигации) и подписи для счётчика
-const NAV = { work: 2, services: 7, about: 8, contact: 9 };
+const NAV = { work: 2, services: 9, about: 10, contact: 11 };
 const SECTIONS = [
   "Главная",
   "О съёмке",
   "Полёт",
-  "Тёплый свет",
+  "Среди зелени",
+  "Шляпа",
+  "Город в каплях",
   "Взгляд",
-  "На рассвете",
+  "Вечер за книгой",
   "Подход",
   "Съёмки",
   "О фотографе",
@@ -350,36 +359,60 @@ export default function PhotoLanding() {
           </div>
         </Panel>
 
-        {/* 2–5 — Работы */}
-        {WORKS.map((w, i) => (
-          <Panel key={w.id}>
-            <div className="flex h-full w-full flex-col lg:flex-row">
-              <div className="relative h-[56%] w-full overflow-hidden lg:h-full lg:w-[60%]">
-                <PhotoFill id={w.id} active={index === 2 + i} />
-              </div>
-              <div className="flex flex-1 flex-col justify-center px-6 py-8 sm:px-10 lg:px-14">
-                <Reveal>
-                  <span className="text-[13px] uppercase tracking-[0.16em]" style={{ color: RED }}>
-                    {w.cat}
-                  </span>
-                  <h2
-                    className="mt-4 text-[clamp(2.4rem,6vw,4.5rem)]"
-                    style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.96 }}
-                  >
-                    {w.title}
-                  </h2>
-                  <div className="mt-5 flex items-center gap-3 text-[14px] text-[#8c8c8c]">
-                    <span>{w.year}</span>
-                    <span className="h-px w-8 bg-[#cfcfcf]" />
-                    <span>
-                      {two(i + 1)} / {two(WORKS.length)}
-                    </span>
+        {/* 2–7 — Работы. Мобайл: фото 9:16 во весь экран + описание поверх фото.
+            Десктоп: фото слева, подпись с описанием справа. */}
+        {WORKS.map((w, i) => {
+          const active = index === 2 + i;
+          return (
+            <Panel key={w.id} bg="#000000" dark>
+              {/* МОБАЙЛ */}
+              <div className="relative h-full w-full lg:hidden">
+                <PhotoFill id={w.id} active={active} />
+                <div
+                  className="absolute inset-0"
+                  style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 28%, rgba(0,0,0,0) 42%, rgba(0,0,0,0.85) 100%)" }}
+                />
+                <div className="absolute inset-x-0 bottom-0">
+                  <div className={`${WRAP} pb-16`}>
+                    <Reveal>
+                      <span className="text-[13px] uppercase tracking-[0.16em]" style={{ color: RED }}>{w.cat}</span>
+                      <h2 className="mt-3 text-[clamp(2.6rem,12vw,4rem)]" style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.96 }}>
+                        {w.title}
+                      </h2>
+                      <p className="mt-3 max-w-[32ch] text-[16px] leading-[1.4] text-white/85">{w.desc}</p>
+                      <div className="mt-4 flex items-center gap-3 text-[13px] text-white/60">
+                        <span>{w.year}</span>
+                        <span className="h-px w-8 bg-white/30" />
+                        <span>{two(i + 1)} / {two(WORKS.length)}</span>
+                      </div>
+                    </Reveal>
                   </div>
-                </Reveal>
+                </div>
               </div>
-            </div>
-          </Panel>
-        ))}
+
+              {/* ДЕСКТОП */}
+              <div className="hidden h-full w-full lg:flex">
+                <div className="relative h-full w-[58%] overflow-hidden">
+                  <PhotoFill id={w.id} active={active} />
+                </div>
+                <div className="flex flex-1 flex-col justify-center bg-white px-14 text-black">
+                  <Reveal>
+                    <span className="text-[13px] uppercase tracking-[0.16em]" style={{ color: RED }}>{w.cat}</span>
+                    <h2 className="mt-4 text-[clamp(2.4rem,4vw,4rem)]" style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.96 }}>
+                      {w.title}
+                    </h2>
+                    <p className="mt-5 max-w-[34ch] text-[18px] leading-[1.45] text-black/70">{w.desc}</p>
+                    <div className="mt-6 flex items-center gap-3 text-[14px] text-[#8c8c8c]">
+                      <span>{w.year}</span>
+                      <span className="h-px w-8 bg-[#cfcfcf]" />
+                      <span>{two(i + 1)} / {two(WORKS.length)}</span>
+                    </div>
+                  </Reveal>
+                </div>
+              </div>
+            </Panel>
+          );
+        })}
 
         {/* 6 — Манифест */}
         <Panel bg="#000000" dark>
