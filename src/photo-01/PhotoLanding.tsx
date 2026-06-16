@@ -190,6 +190,10 @@ export default function PhotoLanding() {
   const trackRef = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
   const [progress, setProgress] = useState(0);
+  // Счётчик заходов на hero — меняет key у фамилии, чтобы CSS-анимация выезда
+  // проигрывалась заново при КАЖДОМ возврате на первый экран, а не только при загрузке.
+  const [heroReveal, setHeroReveal] = useState(0);
+  const prevIndexRef = useRef(-1);
 
   // Перейти к панели i (плавно)
   const goto = useCallback((i: number) => {
@@ -277,12 +281,19 @@ export default function PhotoLanding() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Каждый раз при заходе на hero (index стал 0) — бампаем key, CSS-анимация играет заново.
+  useEffect(() => {
+    if (index === 0 && prevIndexRef.current !== 0) setHeroReveal((n) => n + 1);
+    prevIndexRef.current = index;
+  }, [index]);
+
   return (
     <div
       id="top"
       style={{ fontFamily: FONT }}
       className="relative h-[100svh] w-screen overflow-hidden bg-black antialiased selection:bg-black selection:text-white"
     >
+      <style>{`@keyframes photoSurnameReveal { from { transform: translateY(-100%); } to { transform: translateY(0); } }`}</style>
       {/* ── ЛЕНТА панелей ── */}
       <div
         ref={trackRef}
@@ -323,7 +334,8 @@ export default function PhotoLanding() {
               </h1>
               {/* Яковлев — вертикально, выезжает вниз из-под имени, по левому краю (вровень с «С») */}
               <div className="mt-1 overflow-hidden">
-                <motion.span
+                <span
+                  key={heroReveal}
                   className="inline-block text-white"
                   style={{
                     writingMode: "vertical-rl",
@@ -332,13 +344,11 @@ export default function PhotoLanding() {
                     letterSpacing: "-0.04em",
                     lineHeight: 0.9,
                     ...hollowW(2),
+                    animation: reduceMotion ? undefined : "photoSurnameReveal 1s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both",
                   }}
-                  initial={reduceMotion ? false : { y: "-100%" }}
-                  animate={reduceMotion ? undefined : { y: "0%" }}
-                  transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
                 >
                   Яковлев
-                </motion.span>
+                </span>
               </div>
             </div>
           </div>
@@ -350,7 +360,7 @@ export default function PhotoLanding() {
                 animate={reduceMotion ? undefined : { x: [0, 10, 0] }}
                 transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
               >
-                Листайте вбок <span className="text-base">→</span>
+                Листайте вправо <span className="text-base">→</span>
               </motion.div>
             </div>
           </div>
