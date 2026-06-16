@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizePhone, whatsappLink, telegramLink, messengerLinks } from "./phone";
+import { normalizePhone, whatsappLink, telegramLink, maxLinkOf, messengerLinks } from "./phone";
 
 describe("normalizePhone", () => {
   it("убирает всё кроме цифр", () => {
@@ -35,6 +35,16 @@ describe("telegramLink", () => {
   });
   it("ни того, ни другого → null", () => {
     expect(telegramLink(null, "")).toBeNull();
+  });
+});
+
+describe("maxLinkOf", () => {
+  it("возвращает ссылку, если заполнена", () => {
+    expect(maxLinkOf("https://max.ru/u/abc")).toBe("https://max.ru/u/abc");
+  });
+  it("пусто/пробелы/null → null", () => {
+    expect(maxLinkOf("   ")).toBeNull();
+    expect(maxLinkOf(null)).toBeNull();
   });
 });
 

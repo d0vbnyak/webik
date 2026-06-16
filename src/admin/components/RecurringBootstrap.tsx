@@ -1,12 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { todayISO } from "../lib/dates";
 import { computeDueCharges } from "../lib/recurring";
+import { emitChange } from "../lib/dataBus";
+import { useAuth } from "../hooks/useAuth";
 import type { RecurringExpense, NewExpense } from "../lib/types";
-
-// Гарантия «один прогон за загрузку приложения» (в т.ч. при StrictMode-двойном
-// вызове эффекта и ремонтах лейаута). Это операция уровня всего приложения.
-let started = false;
 
 /**
  * Авто-добавление повторяющихся расходов при входе в админку.
@@ -14,12 +12,19 @@ let started = false;
  * этим recurring_id на эту дату ещё нет — создаём расход и двигаем дату на месяц.
  * Дедуп по существующим датам + сохранение даты сразу = без дублей.
  *
- * Ничего не рендерит. Ошибки логируются, UI не блокируется.
+ * Запускается один раз на пользователя (ref). При смене аккаунта (новый user.id)
+ * прогон повторяется. После вставки эмитим "expenses", чтобы списки обновились.
+ * Ничего не рендерит; ошибки логируются, UI не блокируется.
  */
 export default function RecurringBootstrap() {
+  const { user } = useAuth();
+  const ranForUser = useRef<string | null>(null);
+
   useEffect(() => {
-    if (started) return;
-    started = true;
+    const uid = user?.id;
+    if (!uid) return;
+    if (ranForUser.current === uid) return; // уже прогоняли для этого пользователя
+    ranForUser.current = uid;
 
     void (async () => {
       const today = todayISO();
@@ -32,6 +37,7 @@ export default function RecurringBootstrap() {
         return;
       }
 
+      let inserted = false;
       for (const tpl of (templates ?? []) as RecurringExpense[]) {
         const { data: existing, error: exErr } = await supabase
           .from("expenses")
@@ -57,6 +63,7 @@ export default function RecurringBootstrap() {
             console.error("[recurring] ошибка добавления авто-расходов:", insErr.message);
             continue;
           }
+          inserted = true;
         }
         if (nextChargeDate !== tpl.next_charge_date) {
           const { error: updErr } = await supabase
@@ -66,8 +73,11 @@ export default function RecurringBootstrap() {
           if (updErr) console.error("[recurring] ошибка сдвига даты:", updErr.message);
         }
       }
+
+      // Сообщаем спискам расходов/дашборду, что появились новые записи
+      if (inserted) emitChange("expenses");
     })();
-  }, []);
+  }, [user?.id]);
 
   return null;
 }

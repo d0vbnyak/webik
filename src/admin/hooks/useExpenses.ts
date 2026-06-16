@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { Expense, NewExpense } from "../lib/types";
 import { monthRange } from "../lib/dates";
+import { onChange } from "../lib/dataBus";
 
 /** Расходы за выбранный месяц. Перезагружается при смене периода. */
 export function useExpenses(year: number, month: number) {
@@ -27,6 +28,9 @@ export function useExpenses(year: number, month: number) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Перечитываемся, когда расходы изменились в обход хука (авто-добавление подписок)
+  useEffect(() => onChange("expenses", () => void load()), [load]);
 
   const add = useCallback(async (payload: NewExpense) => {
     const { error: insErr } = await supabase.from("expenses").insert(payload);

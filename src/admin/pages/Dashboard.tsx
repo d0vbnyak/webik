@@ -68,7 +68,8 @@ export default function Dashboard() {
 
           <Card>
             <h2 className="mb-3 font-display text-base font-semibold">Цель по доходу</h2>
-            <ProgressBar value={monthIncome} target={goal} />
+            {/* База прогресса — полученный доход (Σ paid_amount), а не выставленный */}
+            <ProgressBar value={received} target={goal} />
           </Card>
 
           <div className="grid gap-3 sm:grid-cols-2">
