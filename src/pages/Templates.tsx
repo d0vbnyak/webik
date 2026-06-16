@@ -32,7 +32,13 @@ const TEMPLATES: Tpl[] = [
   { name: "Турагентство", category: "путешествия" },
   { name: "Медицинский центр", category: "медицина" },
   { name: "Строительная компания", category: "бизнес" },
-  { name: "Сайт фотографа", category: "креатив" },
+  {
+    name: "Сайт фотографа",
+    category: "креатив",
+    ready: true,
+    href: "/templates/photo-01",
+    image: "/photo-01/preview.jpg?v=1",
+  },
   { name: "Ресторан", category: "общепит" },
   { name: "IT-стартап", category: "технологии" },
   { name: "Магазин одежды", category: "e-commerce" },
@@ -124,7 +130,7 @@ export default function Templates() {
       <PageHeader
         title="Шаблоны"
         accent="вашего будущего сайта."
-        subtitle="20 готовых направлений: выбирайте основу — а мы адаптируем дизайн, тексты и функциональность под ваш бренд. Первый шаблон уже готов — откройте «Лендинг кафе»."
+        subtitle="20 готовых направлений: выбирайте основу — а мы адаптируем дизайн, тексты и функциональность под ваш бренд. Два шаблона уже готовы — откройте «Лендинг кафе» или «Сайт фотографа»."
       />
 
       <div className="max-w-7xl mx-auto px-8 md:px-16 lg:px-20 grid grid-cols-12 gap-x-4 md:gap-x-8">

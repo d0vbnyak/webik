@@ -10,8 +10,9 @@ import Capabilities from "./pages/Capabilities";
 import Works from "./pages/Works";
 import NotFound from "./pages/NotFound";
 
-// Лендинг-шаблон — самый крупный компонент, грузим лениво (не нужен на остальных страницах)
+// Лендинги-шаблоны — крупные компоненты, грузим лениво (не нужны на остальных страницах)
 const CoffeeLanding = lazy(() => import("./coffe-01/CoffeeLanding"));
+const PhotoLanding = lazy(() => import("./photo-01/PhotoLanding"));
 
 /** Основной сайт WebIK — с общим navbar и footer */
 function SiteLayout() {
@@ -44,6 +45,15 @@ export default function App() {
           element={
             <Suspense fallback={<div className="min-h-screen bg-[#15100c]" />}>
               <CoffeeLanding />
+            </Suspense>
+          }
+        />
+        {/* Шаблон фотографа — полноэкранный, без общего лейаута сайта; грузится лениво */}
+        <Route
+          path="/templates/photo-01"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-white" />}>
+              <PhotoLanding />
             </Suspense>
           }
         />
