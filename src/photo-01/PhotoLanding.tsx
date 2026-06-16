@@ -1,18 +1,17 @@
-import { useEffect } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Шаблон «Фотограф» (photo-01)
-   Стиль: редакционный брутализм (Eindhoven Design District) — «печатный журнал,
-   ставший интерактивным». Чёрный текст на белой бумаге, серые полосы-разделители,
-   красный — ТОЛЬКО на метках-рубриках. Без теней и градиентов.
-   Шрифт: Helvetica/Arial (метрики Helvetica, как в исходном референсе).
-   Вёрстка mobile-first: на телефоне всё в столбик, асимметрия и поворот слова —
-   на десктопе (lg+).
+   Шаблон «Фотограф» (photo-01) — ГОРИЗОНТАЛЬНАЯ ЛЕНТА
+   Весь сайт — горизонтальный ряд полноэкранных панелей со «залипанием» (snap).
+   Десктоп: колесо мыши шагает вбок по экранам. Тач: свайп вбок. Плюс стрелки,
+   клавиатура, прогресс-бар и счётчик секций. Эффекты: зум фото активной панели
+   (Ken Burns), плавное появление текста.
+   Стиль — редакционный брутализм (чёрный/белый/#e8e8e8, красный только на
+   метках-рубриках), шрифт Helvetica/Arial.
    ────────────────────────────────────────────────────────────────────────── */
 
-// Дизайн-токены — локально, чтобы не трогать общий сайт WebIK
 const INK = "#000000";
 const PAPER = "#ffffff";
 const NEWSPRINT = "#e8e8e8";
@@ -20,27 +19,20 @@ const RED = "#ff0000";
 const FONT = '"Helvetica Neue", Helvetica, Arial, "Inter", sans-serif';
 
 /* ──────────────────────────────────────────────────────────────────────────
-   ФОТОГРАФИИ. Всё в одном месте — заменить кадр можно в ОДНУ строку: меняете путь
-   в поле `src` (файл кладёте в public/photo-01/). Если поставить src: null —
-   вместо фото рисуется аккуратная подписанная заглушка. `ratio` — пропорции
-   кадра (CSS aspect-ratio), `label` — что это за снимок (идёт в alt).
-   ASSET_V — версия ассетов: меняйте при замене файла, чтобы браузер не показывал
-   старую картинку из кеша.
+   ФОТОГРАФИИ. Заменить кадр — в ОДНУ строку: меняете путь в `src`
+   (файл кладёте в public/photo-01/). ASSET_V — версия кеша (меняйте при замене).
    ────────────────────────────────────────────────────────────────────────── */
 type Photo = { src: string | null; label: string; ratio: string };
 
 const ASSET_V = "1";
 
 const PHOTOS = {
-  // Коллажи во весь экран в начале лендинга
   heroWide: { src: `/photo-01/hero-wide.jpg?v=${ASSET_V}`, label: "Коллаж работ", ratio: "16 / 9" },
   heroTall: { src: `/photo-01/hero-tall.jpg?v=${ASSET_V}`, label: "Коллаж работ", ratio: "9 / 16" },
-  // Портфолио
   workDance: { src: `/photo-01/work-dance.jpg?v=${ASSET_V}`, label: "Полёт", ratio: "4 / 5" },
   workPortrait: { src: `/photo-01/work-portrait.jpg?v=${ASSET_V}`, label: "Тёплый свет", ratio: "4 / 5" },
   workEye: { src: `/photo-01/work-eye.jpg?v=${ASSET_V}`, label: "Взгляд", ratio: "1 / 1" },
   workWindow: { src: `/photo-01/work-window.jpg?v=${ASSET_V}`, label: "На рассвете", ratio: "4 / 5" },
-  // О фотографе
   about: { src: `/photo-01/about.jpg?v=${ASSET_V}`, label: "Портрет фотографа", ratio: "4 / 5" },
 } satisfies Record<string, Photo>;
 
@@ -50,61 +42,31 @@ const reduceMotion =
   typeof window !== "undefined" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/* Заглушка под фото: плоская, в палитре газетно-серого, с подписью кадра и
-   пропорциями. Без теней/градиентов — на стиль это не влияет. */
-function Placeholder({ label, ratio }: { label: string; ratio: string }) {
-  return (
-    <div
-      className="absolute inset-0 flex flex-col items-center justify-center text-center select-none"
-      style={{ color: "#8c8c8c" }}
-      aria-hidden="true"
-    >
-      <span className="absolute inset-3 border border-[#cfcfcf]" />
-      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden="true">
-        <rect x="3" y="6" width="18" height="13" />
-        <circle cx="12" cy="12.5" r="3.2" />
-        <path d="M8 6l1.4-2h5.2L16 6" />
-      </svg>
-      <span className="mt-3 text-[11px] uppercase tracking-[0.16em]">{label}</span>
-      <span className="mt-1 text-[10px] text-[#b3b3b3]">{ratio.replace(/\s/g, "")}</span>
-      <span className="mt-2 text-[9px] uppercase tracking-[0.12em] text-[#bdbdbd]">
-        добавьте своё фото
-      </span>
-    </div>
-  );
-}
-
-/* Кадр: либо реальное фото (если задан src), либо заглушка. Прямоугольный,
-   без рамок/скруглений/теней — как требует стиль. */
-function Frame({ id, className = "" }: { id: PhotoId; className?: string }) {
+/* Фото, заполняющее родителя (родитель — relative overflow-hidden). Активная
+   панель: лёгкий зум 1.08 → 1.0 (Ken Burns). Если src нет — серая заглушка. */
+function PhotoFill({ id, active = true }: { id: PhotoId; active?: boolean }) {
   const p = PHOTOS[id];
+  if (!p.src) return <div className="absolute inset-0" style={{ backgroundColor: NEWSPRINT }} />;
   return (
-    <div
-      className={`relative overflow-hidden ${className}`}
-      style={{ aspectRatio: p.ratio, backgroundColor: NEWSPRINT }}
-    >
-      {p.src ? (
-        <img
-          src={p.src}
-          alt={p.label}
-          loading="lazy"
-          decoding="async"
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      ) : (
-        <Placeholder label={p.label} ratio={p.ratio} />
-      )}
-    </div>
+    <motion.img
+      src={p.src}
+      alt={p.label}
+      decoding="async"
+      className="absolute inset-0 h-full w-full object-cover"
+      initial={false}
+      animate={{ scale: reduceMotion ? 1 : active ? 1 : 1.08 }}
+      transition={{ duration: reduceMotion ? 0 : 1.5, ease: [0.16, 1, 0.3, 1] }}
+    />
   );
 }
 
-/* Плавное проявление секций при прокрутке. Уважает «уменьшить движение». */
+/* Плавное появление текста при входе панели в кадр. Уважает reduce-motion. */
 function Reveal({
   children,
   className = "",
   delay = 0,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
   delay?: number;
 }) {
@@ -113,7 +75,7 @@ function Reveal({
       className={className}
       initial={reduceMotion ? false : { opacity: 0, y: 26 }}
       whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-60px" }}
+      viewport={{ once: true, margin: "-80px" }}
       transition={{ duration: 0.65, delay, ease: [0.16, 1, 0.3, 1] }}
     >
       {children}
@@ -121,16 +83,12 @@ function Reveal({
   );
 }
 
-// Контейнер контента — макс. ширина как в дизайн-проекте (1200px)
-const WRAP = "mx-auto w-full max-w-[1200px] px-5 sm:px-8 lg:px-10";
+// Внутренний контейнер контента панели
+const WRAP = "mx-auto w-full max-w-[1200px] px-6 sm:px-10 lg:px-16";
 
-// Пилюля-ссылка: визуальная база БЕЗ display (чтобы не конфликтовать с `hidden`
-// при адаптивном скрытии), плюс готовые варианты с display для обычного применения.
 const PILL_BASE =
   "items-center rounded-full border border-black px-4 py-2 text-[15px] sm:text-base transition-colors hover:bg-black hover:text-white";
 const PILL_GHOST = `inline-flex ${PILL_BASE}`;
-
-// Белые варианты пилюль — для навигации поверх фото-hero
 const PILL_BASE_W =
   "items-center rounded-full border border-white/80 px-4 py-2 text-[15px] sm:text-base text-white transition-colors hover:bg-white hover:text-black";
 const PILL_FILLED_W =
@@ -144,35 +102,11 @@ const WORKS: { id: PhotoId; cat: string; title: string; year: string }[] = [
   { id: "workWindow", cat: "История", title: "На рассвете", year: "2024" },
 ];
 
-// Раскладка портфолио: чередуем широкие и узкие колонки → асимметрия (десктоп)
-const WORK_SPAN = [
-  "sm:col-span-7",
-  "sm:col-span-5 sm:mt-20",
-  "sm:col-span-5",
-  "sm:col-span-7 sm:mt-20",
-];
-
 const SERVICES = [
-  {
-    title: "Портретная съёмка",
-    desc: "Студия или город, 1–2 часа, 20–30 обработанных кадров",
-    price: "от 12 000 ₽",
-  },
-  {
-    title: "Love-story и пары",
-    desc: "Съёмка-прогулка вашей истории — дома или на улицах города",
-    price: "от 18 000 ₽",
-  },
-  {
-    title: "Семейная съёмка",
-    desc: "Тёплые кадры о близких, без постановки и натянутых улыбок",
-    price: "от 16 000 ₽",
-  },
-  {
-    title: "Репортаж и события",
-    desc: "Свадьбы, концерты, городские истории",
-    price: "договорная",
-  },
+  { title: "Портретная съёмка", desc: "Студия или город, 1–2 часа, 20–30 обработанных кадров", price: "от 12 000 ₽" },
+  { title: "Love-story и пары", desc: "Съёмка-прогулка вашей истории — дома или на улицах города", price: "от 18 000 ₽" },
+  { title: "Семейная съёмка", desc: "Тёплые кадры о близких, без постановки и натянутых улыбок", price: "от 16 000 ₽" },
+  { title: "Репортаж и события", desc: "Свадьбы, концерты, городские истории", price: "договорная" },
 ];
 
 const CONTACTS = [
@@ -181,291 +115,443 @@ const CONTACTS = [
   { label: "Behance", href: "https://www.behance.net/" },
 ];
 
+// Индексы панелей (для навигации) и подписи для счётчика
+const NAV = { work: 2, services: 7, about: 8, contact: 9 };
+const SECTIONS = [
+  "Главная",
+  "О съёмке",
+  "Полёт",
+  "Тёплый свет",
+  "Взгляд",
+  "На рассвете",
+  "Подход",
+  "Съёмки",
+  "О фотографе",
+  "Контакты",
+];
+const COUNT = SECTIONS.length;
+
+// Полноэкранная панель ленты
+function Panel({
+  children,
+  bg = PAPER,
+  dark = false,
+  className = "",
+}: {
+  children: ReactNode;
+  bg?: string;
+  dark?: boolean;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`relative h-[100svh] w-screen flex-none snap-start snap-always overflow-hidden ${className}`}
+      style={{ backgroundColor: bg, color: dark ? "#ffffff" : INK }}
+    >
+      {children}
+    </section>
+  );
+}
+
+const two = (n: number) => String(n).padStart(2, "0");
+
 export default function PhotoLanding() {
-  // Плавная прокрутка к якорям внутри шаблона; возвращаем как было при выходе
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+
+  // Перейти к панели i (плавно)
+  const goto = useCallback((i: number) => {
+    const el = trackRef.current;
+    if (!el) return;
+    const clamped = Math.max(0, Math.min(COUNT - 1, i));
+    el.scrollTo({ left: clamped * el.clientWidth, behavior: reduceMotion ? "auto" : "smooth" });
+  }, []);
+
+  // Колесо мыши → шаг вбок с залипанием (десктоп). Горизонтальный жест трекпада
+  // отдаём нативной прокрутке. Слушатель non-passive — чтобы preventDefault сработал.
   useEffect(() => {
-    const prev = document.documentElement.style.scrollBehavior;
-    if (!reduceMotion) document.documentElement.style.scrollBehavior = "smooth";
-    return () => {
-      document.documentElement.style.scrollBehavior = prev;
+    const el = trackRef.current;
+    if (!el) return;
+    let locked = false;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; // горизонтальный свайп — нативно
+      e.preventDefault();
+      if (locked || Math.abs(e.deltaY) < 4) return;
+      locked = true;
+      const cur = Math.round(el.scrollLeft / el.clientWidth);
+      goto(cur + (e.deltaY > 0 ? 1 : -1));
+      window.setTimeout(() => {
+        locked = false;
+      }, 650);
     };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [goto]);
+
+  // Прокрутка → счётчик + прогресс
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const w = el.clientWidth || 1;
+        const max = el.scrollWidth - w;
+        setProgress(max > 0 ? el.scrollLeft / max : 0);
+        setIndex(Math.round(el.scrollLeft / w));
+      });
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // Клавиатура: стрелки / PageUp-Down / Home / End
+  useEffect(() => {
+    const cur = () => {
+      const el = trackRef.current;
+      return el ? Math.round(el.scrollLeft / el.clientWidth) : 0;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight" || e.key === "PageDown") {
+        e.preventDefault();
+        goto(cur() + 1);
+      } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+        e.preventDefault();
+        goto(cur() - 1);
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        goto(0);
+      } else if (e.key === "End") {
+        e.preventDefault();
+        goto(COUNT - 1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [goto]);
+
+  // При ресайзе держим выравнивание по текущей панели
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const onResize = () =>
+      el.scrollTo({ left: Math.round(el.scrollLeft / el.clientWidth) * el.clientWidth });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   return (
     <div
       id="top"
-      style={{ backgroundColor: PAPER, color: INK, fontFamily: FONT }}
-      className="min-h-screen antialiased selection:bg-black selection:text-white"
+      style={{ fontFamily: FONT }}
+      className="relative h-[100svh] w-screen overflow-hidden bg-black antialiased selection:bg-black selection:text-white"
     >
-      {/* ── Hero: полноэкранный коллаж работ ── */}
-      <section className="relative h-[100svh] min-h-[560px] w-full overflow-hidden bg-black">
-        {/* Коллаж: широкий 16:9 на десктопе/планшете, вертикальный 9:16 на телефоне */}
-        <img
-          src={PHOTOS.heroWide.src!}
-          alt="Коллаж работ фотографа Артёма Волкова"
-          decoding="async"
-          className="absolute inset-0 hidden h-full w-full object-cover sm:block"
-        />
-        <img
-          src={PHOTOS.heroTall.src!}
-          alt="Коллаж работ фотографа Артёма Волкова"
-          decoding="async"
-          className="absolute inset-0 h-full w-full object-cover sm:hidden"
-        />
-        {/* Затемнение по краям — только ради читаемости текста (фото в центре чистое) */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 26%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.78) 100%)",
-          }}
-        />
-
-        {/* Навигация поверх фото */}
-        <header className="absolute inset-x-0 top-0 z-20">
-          <div className={`${WRAP} flex items-center justify-between py-5 sm:py-7`}>
-            <a href="#top" className="text-[13px] leading-[1.05] text-white sm:text-sm">
-              <span className="block">Артём</span>
-              <span className="block">Волков</span>
-            </a>
-            <nav className="flex items-center gap-2 sm:gap-3" aria-label="Разделы">
-              <a href="#work" className={`hidden sm:inline-flex ${PILL_BASE_W}`}>
-                Портфолио
-              </a>
-              <a href="#services" className={`hidden md:inline-flex ${PILL_BASE_W}`}>
-                Съёмки
-              </a>
-              <a href="#about" className={`hidden md:inline-flex ${PILL_BASE_W}`}>
-                О себе
-              </a>
-              <a href="#contact" className={PILL_FILLED_W}>
-                Связаться
-              </a>
-            </nav>
+      {/* ── ЛЕНТА панелей ── */}
+      <div
+        ref={trackRef}
+        className="flex h-[100svh] w-screen snap-x snap-mandatory overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {/* 0 — Hero: полноэкранный коллаж */}
+        <Panel bg="#000000" dark>
+          <img
+            src={PHOTOS.heroWide.src!}
+            alt="Коллаж работ фотографа Артёма Волкова"
+            decoding="async"
+            className="absolute inset-0 hidden h-full w-full object-cover sm:block"
+          />
+          <img
+            src={PHOTOS.heroTall.src!}
+            alt="Коллаж работ фотографа Артёма Волкова"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover sm:hidden"
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 26%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.8) 100%)",
+            }}
+          />
+          {/* Навигация */}
+          <header className="absolute inset-x-0 top-0 z-20">
+            <div className={`${WRAP} flex items-center justify-between py-5 sm:py-7`}>
+              <span className="text-[13px] leading-[1.05] text-white sm:text-sm">
+                <span className="block">Артём</span>
+                <span className="block">Волков</span>
+              </span>
+              <nav className="flex items-center gap-2 sm:gap-3" aria-label="Разделы">
+                <button onClick={() => goto(NAV.work)} className={`hidden sm:inline-flex ${PILL_BASE_W}`}>
+                  Портфолио
+                </button>
+                <button onClick={() => goto(NAV.services)} className={`hidden md:inline-flex ${PILL_BASE_W}`}>
+                  Съёмки
+                </button>
+                <button onClick={() => goto(NAV.about)} className={`hidden md:inline-flex ${PILL_BASE_W}`}>
+                  О себе
+                </button>
+                <button onClick={() => goto(NAV.contact)} className={PILL_FILLED_W}>
+                  Связаться
+                </button>
+              </nav>
+            </div>
+          </header>
+          {/* Имя */}
+          <div className="absolute inset-x-0 bottom-0 z-10">
+            <div className={`${WRAP} pb-14 sm:pb-20`}>
+              <span className="text-[13px] uppercase tracking-[0.2em] text-white/85">
+                Фотограф · портрет и истории
+              </span>
+              <h1
+                className="mt-3 text-white"
+                style={{ fontWeight: 400, fontSize: "clamp(3.6rem, 13vw, 11rem)", letterSpacing: "-0.04em", lineHeight: 0.88 }}
+              >
+                <span className="block">Артём</span>
+                <span className="block">Волков</span>
+              </h1>
+              {/* Подсказка прокрутки */}
+              <motion.div
+                className="mt-7 inline-flex items-center gap-2 text-[13px] uppercase tracking-[0.18em] text-white/80"
+                animate={reduceMotion ? undefined : { x: [0, 10, 0] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+              >
+                Листайте вбок <span className="text-base">→</span>
+              </motion.div>
+            </div>
           </div>
-        </header>
+        </Panel>
 
-        {/* Имя — крупно по нижнему краю */}
-        <div className="absolute inset-x-0 bottom-0 z-10">
-          <div className={`${WRAP} pb-10 sm:pb-16`}>
-            <span className="text-[13px] uppercase tracking-[0.2em] text-white/85">
-              Фотограф · портрет и истории
-            </span>
-            <h1
-              className="mt-3 text-white"
-              style={{
-                fontWeight: 400,
-                fontSize: "clamp(3.6rem, 13vw, 11rem)",
-                letterSpacing: "-0.04em",
-                lineHeight: 0.88,
-              }}
-            >
-              <span className="block">Артём</span>
-              <span className="block">Волков</span>
-            </h1>
+        {/* 1 — Вступление */}
+        <Panel>
+          <div className={`${WRAP} flex h-full flex-col justify-center`}>
+            <Reveal>
+              <span className="text-[14px] uppercase tracking-[0.16em]" style={{ color: RED }}>
+                Вступление
+              </span>
+              <p
+                className="mt-6 max-w-[20ch] text-[clamp(2rem,5.5vw,4.5rem)]"
+                style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 1.02 }}
+              >
+                Снимаю людей и то, что между ними.
+              </p>
+              <p className="mt-7 max-w-[52ch] text-[18px] leading-[1.5] text-black/70 sm:text-[20px]">
+                Взгляд, прикосновение, свет из окна. Без постановки — только настоящие
+                моменты, в которых виден человек.
+              </p>
+              <button onClick={() => goto(NAV.work)} className={`mt-9 ${PILL_GHOST}`}>
+                Смотреть работы →
+              </button>
+            </Reveal>
           </div>
-        </div>
-      </section>
+        </Panel>
 
-      {/* ── Вступление ── */}
-      <section className={`${WRAP} py-16 sm:py-24`}>
-        <Reveal>
-          <p className="max-w-[620px] text-[20px] leading-[1.4] tracking-[-0.01em] sm:text-[23px]">
-            Снимаю людей и то, что между ними: взгляд, прикосновение, свет из окна.
-            Без постановки — только настоящие моменты, в которых виден человек.
-          </p>
-          <a href="#work" className={`mt-8 ${PILL_GHOST}`}>
-            Смотреть портфолио
-          </a>
-        </Reveal>
-      </section>
-
-      {/* ── Портфолио ── */}
-      <section id="work" className={`${WRAP} scroll-mt-8 pb-20 sm:pb-28`}>
-        <Reveal className="mb-10 flex items-end justify-between border-t border-black pt-4 sm:mb-14">
-          <h2
-            style={{ fontWeight: 600, letterSpacing: "-0.02em" }}
-            className="text-[32px] leading-[1] sm:text-[46px]"
-          >
-            Избранные работы
-          </h2>
-          <span className="text-[14px] text-[#8c8c8c]">01 — 04</span>
-        </Reveal>
-
-        <div className="grid grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-12 sm:gap-y-16">
-          {WORKS.map((w, i) => (
-            <Reveal key={w.id} className={WORK_SPAN[i]} delay={(i % 2) * 0.08}>
-              <Frame id={w.id} />
-              <div className="mt-4">
-                <span
-                  className="text-[14px] uppercase tracking-[0.06em]"
-                  style={{ color: RED }}
-                >
-                  {w.cat}
-                </span>
-                <div className="mt-1 flex items-baseline justify-between gap-4">
-                  <h3
-                    style={{ fontWeight: 600, letterSpacing: "-0.01em" }}
-                    className="text-[20px] leading-[1.2] sm:text-[23px]"
+        {/* 2–5 — Работы */}
+        {WORKS.map((w, i) => (
+          <Panel key={w.id}>
+            <div className="flex h-full w-full flex-col lg:flex-row">
+              <div className="relative h-[56%] w-full overflow-hidden lg:h-full lg:w-[60%]">
+                <PhotoFill id={w.id} active={index === 2 + i} />
+              </div>
+              <div className="flex flex-1 flex-col justify-center px-6 py-8 sm:px-10 lg:px-14">
+                <Reveal>
+                  <span className="text-[13px] uppercase tracking-[0.16em]" style={{ color: RED }}>
+                    {w.cat}
+                  </span>
+                  <h2
+                    className="mt-4 text-[clamp(2.4rem,6vw,4.5rem)]"
+                    style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.96 }}
                   >
                     {w.title}
-                  </h3>
-                  <span className="shrink-0 text-[14px] text-[#8c8c8c]">{w.year}</span>
-                </div>
+                  </h2>
+                  <div className="mt-5 flex items-center gap-3 text-[14px] text-[#8c8c8c]">
+                    <span>{w.year}</span>
+                    <span className="h-px w-8 bg-[#cfcfcf]" />
+                    <span>
+                      {two(i + 1)} / {two(WORKS.length)}
+                    </span>
+                  </div>
+                </Reveal>
               </div>
+            </div>
+          </Panel>
+        ))}
+
+        {/* 6 — Манифест */}
+        <Panel bg="#000000" dark>
+          <div className={`${WRAP} flex h-full flex-col justify-center`}>
+            <Reveal>
+              <span className="text-[14px] uppercase tracking-[0.1em]" style={{ color: RED }}>
+                Подход
+              </span>
+              <h2
+                className="mt-5 max-w-[16ch] text-[clamp(2.4rem,7vw,6rem)]"
+                style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.98 }}
+              >
+                Снимаю не лица, а то, что за ними.
+              </h2>
+              <p className="mt-8 max-w-[54ch] text-[18px] leading-[1.5] text-white/70 sm:text-[20px]">
+                Хороший кадр случается, когда человек забывает про камеру. Поэтому я не
+                командую «улыбнитесь» — я жду. Разговариваю, гуляю, ловлю свет и паузу
+                между словами. То, что остаётся, и есть портрет.
+              </p>
+              <button onClick={() => goto(NAV.about)} className={`mt-10 inline-flex ${PILL_BASE_W}`}>
+                Как я работаю
+              </button>
             </Reveal>
-          ))}
-        </div>
-      </section>
+          </div>
+        </Panel>
 
-      {/* ── Манифест: инвертированная чёрная полоса ── */}
-      <section className="bg-black text-white">
-        <div className={`${WRAP} py-20 sm:py-32`}>
-          <Reveal>
-            <span className="text-[14px] uppercase tracking-[0.1em]" style={{ color: RED }}>
-              Подход
-            </span>
-            <h2
-              style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.98 }}
-              className="mt-5 max-w-[16ch] text-[40px] sm:text-[72px]"
-            >
-              Снимаю не лица, а то, что за ними.
-            </h2>
-            <p className="mt-8 max-w-[52ch] text-[18px] leading-[1.5] text-white/70">
-              Хороший кадр случается, когда человек забывает про камеру. Поэтому я не
-              командую «улыбнитесь» — я жду. Разговариваю, гуляю, ловлю свет и паузу
-              между словами. То, что остаётся, и есть портрет.
-            </p>
-            <a href="#about" className={`mt-10 inline-flex ${PILL_BASE_W}`}>
-              Как я работаю
-            </a>
-          </Reveal>
-        </div>
-      </section>
+        {/* 7 — Съёмки */}
+        <Panel bg={NEWSPRINT}>
+          <div className={`${WRAP} flex h-full flex-col justify-center`}>
+            <Reveal>
+              <h2
+                className="text-[clamp(2.2rem,5vw,3.5rem)]"
+                style={{ fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1 }}
+              >
+                Съёмки
+              </h2>
+            </Reveal>
+            <div className="mt-8 sm:mt-10">
+              {SERVICES.map((s, i) => (
+                <Reveal key={s.title} delay={(i % 2) * 0.06}>
+                  <div className="flex flex-col gap-1 border-t border-black py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:py-5">
+                    <h3 style={{ fontWeight: 600, letterSpacing: "-0.01em" }} className="text-[20px] leading-[1.15] sm:w-1/3 sm:text-[23px]">
+                      {s.title}
+                    </h3>
+                    <p className="text-[15px] leading-[1.4] text-black/65 sm:flex-1 sm:text-[16px]">{s.desc}</p>
+                    <span className="text-[17px] sm:text-right sm:text-[18px]">{s.price}</span>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+            <Reveal>
+              <button onClick={() => goto(NAV.contact)} className={`mt-9 ${PILL_GHOST}`}>
+                Обсудить съёмку
+              </button>
+            </Reveal>
+          </div>
+        </Panel>
 
-      {/* ── Услуги: серая полоса ── */}
-      <section id="services" className="scroll-mt-8" style={{ backgroundColor: NEWSPRINT }}>
-        <div className={`${WRAP} py-20 sm:py-28`}>
-          <Reveal>
-            <h2
-              style={{ fontWeight: 600, letterSpacing: "-0.02em" }}
-              className="text-[32px] leading-[1] sm:text-[46px]"
-            >
-              Съёмки
-            </h2>
-          </Reveal>
-          <div className="mt-10 sm:mt-14">
-            {SERVICES.map((s, i) => (
-              <Reveal key={s.title} delay={(i % 2) * 0.06}>
-                <div className="flex flex-col gap-2 border-t border-black py-6 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
-                  <h3
-                    style={{ fontWeight: 600, letterSpacing: "-0.01em" }}
-                    className="text-[23px] leading-[1.15] sm:w-1/3"
-                  >
-                    {s.title}
-                  </h3>
-                  <p className="text-[16px] leading-[1.4] text-black/65 sm:flex-1">
-                    {s.desc}
+        {/* 8 — О фотографе */}
+        <Panel>
+          <div className="flex h-full w-full flex-col lg:flex-row">
+            <div className="relative h-[48%] w-full overflow-hidden lg:h-full lg:w-[45%]">
+              <PhotoFill id="about" active={index === NAV.about} />
+            </div>
+            <div className="flex flex-1 flex-col justify-center px-6 py-8 sm:px-10 lg:px-14">
+              <Reveal>
+                <span className="text-[14px] uppercase tracking-[0.1em]" style={{ color: RED }}>
+                  О фотографе
+                </span>
+                <h2
+                  className="mt-4 text-[clamp(2.2rem,4.5vw,3.5rem)]"
+                  style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.95 }}
+                >
+                  Артём Волков
+                </h2>
+                <div className="mt-5 max-w-[52ch] space-y-3 text-[16px] leading-[1.45] text-black/80 sm:text-[18px]">
+                  <p>
+                    Фотограф из Москвы. Снимаю людей с 2015 года: портреты, пары, семьи и
+                    те тихие моменты, ради которых стоит остановить время.
                   </p>
-                  <span className="text-[18px] sm:text-right">{s.price}</span>
+                  <p>
+                    Верю, что хорошая фотография не приукрашивает человека, а помогает его
+                    разглядеть. Снимаю на плёнку и цифру, обрабатываю сам.
+                  </p>
+                </div>
+                <div className="mt-8 flex gap-10">
+                  {[
+                    { n: "10 лет", l: "в фотографии" },
+                    { n: "200+", l: "съёмок" },
+                    { n: "6", l: "выставок" },
+                  ].map((s) => (
+                    <div key={s.l}>
+                      <div style={{ fontWeight: 600 }} className="text-[26px] leading-none">{s.n}</div>
+                      <div className="mt-1.5 text-[13px] text-black/55">{s.l}</div>
+                    </div>
+                  ))}
                 </div>
               </Reveal>
-            ))}
+            </div>
           </div>
-          <Reveal>
-            <a href="#contact" className={`mt-12 ${PILL_GHOST}`}>
-              Обсудить съёмку
-            </a>
-          </Reveal>
-        </div>
-      </section>
+        </Panel>
 
-      {/* ── О фотографе ── */}
-      <section id="about" className={`${WRAP} scroll-mt-8 py-20 sm:py-28`}>
-        <div className="grid items-start gap-10 lg:grid-cols-[1fr_1.2fr] lg:gap-16">
-          <Reveal>
-            <Frame id="about" />
-          </Reveal>
-          <Reveal delay={0.08}>
-            <span className="text-[14px] uppercase tracking-[0.1em]" style={{ color: RED }}>
-              О фотографе
-            </span>
-            <h2
-              style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.95 }}
-              className="mt-4 text-[40px] sm:text-[56px]"
-            >
-              Артём Волков
-            </h2>
-            <div className="mt-6 max-w-[52ch] space-y-4 text-[18px] leading-[1.4] text-black/80">
-              <p>
-                Фотограф из Москвы. Снимаю людей с 2015 года: портреты, пары, семьи и
-                те тихие моменты, ради которых стоит остановить время.
+        {/* 9 — Контакты */}
+        <Panel bg="#000000" dark>
+          <div className={`${WRAP} flex h-full flex-col justify-center`}>
+            <Reveal>
+              <h2
+                className="text-[clamp(3.5rem,12vw,9rem)]"
+                style={{ fontWeight: 400, letterSpacing: "-0.04em", lineHeight: 0.9 }}
+              >
+                Снимем?
+              </h2>
+              <p className="mt-6 max-w-[40ch] text-[18px] leading-[1.4] text-white/70 sm:text-[20px]">
+                Расскажите про задачу — отвечу в течение дня.
               </p>
-              <p>
-                Верю, что хорошая фотография не приукрашивает человека, а помогает его
-                разглядеть. Снимаю на плёнку и цифру, обрабатываю сам, держу серию
-                цельной — от первого кадра до печати.
-              </p>
-            </div>
-            <div className="mt-10 flex gap-10">
-              {[
-                { n: "10 лет", l: "в фотографии" },
-                { n: "200+", l: "съёмок" },
-                { n: "6", l: "выставок" },
-              ].map((s) => (
-                <div key={s.l}>
-                  <div style={{ fontWeight: 600 }} className="text-[28px] leading-none">
-                    {s.n}
-                  </div>
-                  <div className="mt-1.5 text-[13px] text-black/55">{s.l}</div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ── Контакт-футер: инвертированная полоса ── */}
-      <footer id="contact" className="scroll-mt-8 bg-black text-white">
-        <div className={`${WRAP} py-20 sm:py-28`}>
-          <Reveal>
-            <h2
-              style={{ fontWeight: 400, letterSpacing: "-0.04em", lineHeight: 0.9 }}
-              className="text-[72px] sm:text-[120px]"
-            >
-              Снимем?
-            </h2>
-            <p className="mt-6 max-w-[40ch] text-[18px] leading-[1.4] text-white/70">
-              Расскажите про задачу — отвечу в течение дня.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              {CONTACTS.map((c) => (
-                <a
-                  key={c.label}
-                  href={c.href}
-                  className="inline-flex items-center rounded-full border border-white px-4 py-2 text-[15px] transition-colors hover:bg-white hover:text-black sm:text-base"
+              <div className="mt-8 flex flex-wrap gap-3">
+                {CONTACTS.map((c) => (
+                  <a key={c.label} href={c.href} className={`inline-flex ${PILL_BASE_W}`}>
+                    {c.label}
+                  </a>
+                ))}
+              </div>
+            </Reveal>
+            <div className="absolute inset-x-0 bottom-8 sm:bottom-10">
+              <div className={`${WRAP} flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-white/15 pt-5 text-[12px] text-white/55`}>
+                <Link
+                  to="/templates"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
                 >
-                  {c.label}
-                </a>
-              ))}
+                  ← Все шаблоны WebIK
+                </Link>
+                <span>© 2026 Артём Волков · Шаблон фотографа</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#9fff00]" />
+                  Сделано в WebIK
+                </span>
+              </div>
             </div>
-          </Reveal>
-
-          <div className="mt-16 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-white/15 pt-6 text-[12px] text-white/55">
-            <Link
-              to="/templates"
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              ← Все шаблоны WebIK
-            </Link>
-            <span>© 2026 Артём Волков · Шаблон фотографа</span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#9fff00]" />
-              Сделано в WebIK
-            </span>
           </div>
-        </div>
-      </footer>
+        </Panel>
+      </div>
+
+      {/* ── Постоянный интерфейс поверх ленты (auto-контраст через mix-blend) ── */}
+      {/* Стрелки (десктоп) */}
+      <button
+        aria-label="Назад"
+        onClick={() => goto(index - 1)}
+        className={`fixed left-3 top-1/2 z-40 hidden -translate-y-1/2 text-3xl text-white mix-blend-difference transition-opacity sm:block ${
+          index === 0 ? "pointer-events-none opacity-0" : "opacity-80 hover:opacity-100"
+        }`}
+      >
+        ‹
+      </button>
+      <button
+        aria-label="Вперёд"
+        onClick={() => goto(index + 1)}
+        className={`fixed right-3 top-1/2 z-40 hidden -translate-y-1/2 text-3xl text-white mix-blend-difference transition-opacity sm:block ${
+          index === COUNT - 1 ? "pointer-events-none opacity-0" : "opacity-80 hover:opacity-100"
+        }`}
+      >
+        ›
+      </button>
+
+      {/* Счётчик секций */}
+      <div className="pointer-events-none fixed bottom-4 right-5 z-40 text-[12px] uppercase tracking-[0.12em] text-white mix-blend-difference">
+        <span className="tabular-nums">{two(index + 1)}</span> / {two(COUNT)} · {SECTIONS[index]}
+      </div>
+
+      {/* Прогресс-бар */}
+      <div className="fixed inset-x-0 bottom-0 z-40 h-[3px] bg-white/10">
+        <div className="h-full bg-white mix-blend-difference" style={{ width: `${progress * 100}%` }} />
+      </div>
     </div>
   );
 }
