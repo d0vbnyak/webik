@@ -1,12 +1,15 @@
 import { Outlet } from "react-router";
 import { useAuth } from "./hooks/useAuth";
 import BottomNav from "./components/BottomNav";
+import RecurringBootstrap from "./components/RecurringBootstrap";
 
 export default function AdminLayout() {
   const { signOut } = useAuth();
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      {/* Фоновое авто-добавление повторяющихся расходов (один раз за загрузку) */}
+      <RecurringBootstrap />
       <header className="sticky top-0 z-30 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
           <span className="font-display text-sm font-semibold tracking-tight">
