@@ -115,6 +115,11 @@ const PILL_GHOST = `inline-flex ${PILL_BASE}`;
 const PILL_BASE_W =
   "items-center rounded-none border border-white/80 px-4 py-2 text-[15px] sm:text-base text-white transition-colors hover:bg-white hover:text-black";
 
+// Полые (контурные) заголовки: прозрачная заливка + обводка.
+// Белая обводка — на тёмных фото/панелях, чёрная — на светлых.
+const hollowW = (px: number) => ({ color: "transparent", WebkitTextStroke: `${px}px #ffffff` });
+const hollowK = (px: number) => ({ color: "transparent", WebkitTextStroke: `${px}px #000000` });
+
 /* Данные секций. desc — короткое описание прямо на фото. id — вертикальное фото
    (мобайл), wide — широкое 16:9 (десктоп); если wide нет, на десктопе берётся id. */
 const WORKS: { id: PhotoId; wide?: PhotoId; cat: string; title: string; desc: string; year: string }[] = [
@@ -134,7 +139,7 @@ const SERVICES = [
 ];
 
 const CONTACTS = [
-  { label: "hello@artemvolkov.ru", href: "mailto:hello@artemvolkov.ru" },
+  { label: "hello@sergeyyakovlev.ru", href: "mailto:hello@sergeyyakovlev.ru" },
   { label: "Telegram", href: "https://t.me/" },
   { label: "Behance", href: "https://www.behance.net/" },
 ];
@@ -287,13 +292,13 @@ export default function PhotoLanding() {
         <Panel bg="#000000" dark>
           <img
             src={PHOTOS.heroWide.src!}
-            alt="Коллаж работ фотографа Артёма Волкова"
+            alt="Коллаж работ фотографа Сергея Яковлева"
             decoding="async"
             className="absolute inset-0 hidden h-full w-full object-cover sm:block"
           />
           <img
             src={PHOTOS.heroTall.src!}
-            alt="Коллаж работ фотографа Артёма Волкова"
+            alt="Коллаж работ фотографа Сергея Яковлева"
             decoding="async"
             className="absolute inset-0 h-full w-full object-cover sm:hidden"
           />
@@ -312,26 +317,27 @@ export default function PhotoLanding() {
               </span>
               <h1
                 className="mt-3 text-white"
-                style={{ fontWeight: 400, fontSize: "clamp(3.4rem, 12vw, 9rem)", letterSpacing: "-0.04em", lineHeight: 0.9 }}
+                style={{ fontWeight: 400, fontSize: "clamp(5.1rem, 18vw, 13.5rem)", letterSpacing: "-0.04em", lineHeight: 0.9, ...hollowW(2.5) }}
               >
-                Артём
+                Сергей
               </h1>
-              {/* Волков — вертикально, выезжает вниз из-под имени, по левому краю (вровень с «А») */}
+              {/* Яковлев — вертикально, выезжает вниз из-под имени, по левому краю (вровень с «С») */}
               <div className="mt-1 overflow-hidden">
                 <motion.span
                   className="inline-block text-white"
                   style={{
                     writingMode: "vertical-rl",
                     fontWeight: 400,
-                    fontSize: "clamp(2.2rem, 9vh, 6rem)",
+                    fontSize: "clamp(3.3rem, 13.5vh, 9rem)",
                     letterSpacing: "-0.04em",
                     lineHeight: 0.9,
+                    ...hollowW(2),
                   }}
                   initial={reduceMotion ? false : { y: "-100%" }}
                   animate={reduceMotion ? undefined : { y: "0%" }}
                   transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
                 >
-                  Волков
+                  Яковлев
                 </motion.span>
               </div>
             </div>
@@ -369,8 +375,8 @@ export default function PhotoLanding() {
                 Вступление
               </span>
               <p
-                className="mt-6 max-w-[20ch] text-[clamp(2rem,5.5vw,4.5rem)] text-white"
-                style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 1.02 }}
+                className="mt-6 max-w-[20ch] text-[clamp(3rem,8.25vw,6.75rem)] text-white"
+                style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 1.02, ...hollowW(1.5) }}
               >
                 Снимаю людей и то, что между ними.
               </p>
@@ -405,7 +411,7 @@ export default function PhotoLanding() {
                 <div className={`${WRAP} pb-16 sm:pb-20`}>
                   <Reveal>
                     <span className="text-[13px] uppercase tracking-[0.16em]" style={{ color: RED }}>{w.cat}</span>
-                    <h2 className="mt-3 text-white text-[clamp(2.6rem,8vw,5rem)]" style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.96 }}>
+                    <h2 className="mt-3 text-white text-[clamp(3.9rem,12vw,7.5rem)]" style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.96, ...hollowW(2) }}>
                       {w.title}
                     </h2>
                     <p className="mt-3 max-w-[42ch] text-[16px] leading-[1.45] text-white/85 sm:text-[18px]">{w.desc}</p>
@@ -429,8 +435,8 @@ export default function PhotoLanding() {
                 Подход
               </span>
               <h2
-                className="mt-5 max-w-[16ch] text-[clamp(2.4rem,7vw,6rem)]"
-                style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.98 }}
+                className="mt-5 max-w-[16ch] text-[clamp(3.6rem,10.5vw,9rem)]"
+                style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.98, ...hollowW(1.5) }}
               >
                 Снимаю не лица, а то, что за ними.
               </h2>
@@ -451,8 +457,8 @@ export default function PhotoLanding() {
           <div className={`${WRAP} flex h-full flex-col justify-center`}>
             <Reveal>
               <h2
-                className="text-[clamp(2.2rem,5vw,3.5rem)]"
-                style={{ fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1 }}
+                className="text-[clamp(3.3rem,7.5vw,5.25rem)]"
+                style={{ fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1, ...hollowK(1.5) }}
               >
                 Съёмки
               </h2>
@@ -490,10 +496,10 @@ export default function PhotoLanding() {
                   О фотографе
                 </span>
                 <h2
-                  className="mt-4 text-[clamp(2.2rem,4.5vw,3.5rem)]"
-                  style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.95 }}
+                  className="mt-4 text-[clamp(3.3rem,6.75vw,5.25rem)]"
+                  style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.95, ...hollowK(1.5) }}
                 >
-                  Артём Волков
+                  Сергей Яковлев
                 </h2>
                 <div className="mt-5 max-w-[52ch] space-y-3 text-[16px] leading-[1.45] text-black/80 sm:text-[18px]">
                   <p>
@@ -527,8 +533,8 @@ export default function PhotoLanding() {
           <div className={`${WRAP} flex h-full flex-col justify-center`}>
             <Reveal>
               <h2
-                className="text-[clamp(3.5rem,12vw,9rem)]"
-                style={{ fontWeight: 400, letterSpacing: "-0.04em", lineHeight: 0.9 }}
+                className="text-[clamp(5.25rem,18vw,13.5rem)]"
+                style={{ fontWeight: 400, letterSpacing: "-0.04em", lineHeight: 0.9, ...hollowW(2.5) }}
               >
                 Снимем?
               </h2>
@@ -551,7 +557,7 @@ export default function PhotoLanding() {
                 >
                   ← Все шаблоны WebIK
                 </Link>
-                <span>© 2026 Артём Волков · Шаблон фотографа</span>
+                <span>© 2026 Сергей Яковлев · Шаблон фотографа</span>
                 <span className="flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-[#9fff00]" />
                   Сделано в WebIK
