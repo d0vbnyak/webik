@@ -93,10 +93,10 @@ function Reveal({
 const WRAP = "mx-auto w-full max-w-[1200px] px-6 sm:px-10 lg:px-16";
 
 const PILL_BASE =
-  "items-center rounded-full border border-black px-4 py-2 text-[15px] sm:text-base transition-colors hover:bg-black hover:text-white";
+  "items-center rounded-none border border-black px-4 py-2 text-[15px] sm:text-base transition-colors hover:bg-black hover:text-white";
 const PILL_GHOST = `inline-flex ${PILL_BASE}`;
 const PILL_BASE_W =
-  "items-center rounded-full border border-white/80 px-4 py-2 text-[15px] sm:text-base text-white transition-colors hover:bg-white hover:text-black";
+  "items-center rounded-none border border-white/80 px-4 py-2 text-[15px] sm:text-base text-white transition-colors hover:bg-white hover:text-black";
 
 /* Данные секций. desc — короткое описание, выводится прямо на фото. */
 const WORKS: { id: PhotoId; cat: string; title: string; desc: string; year: string }[] = [
@@ -527,7 +527,7 @@ export default function PhotoLanding() {
               <div className={`${WRAP} flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-white/15 pt-5 text-[12px] text-white/55`}>
                 <Link
                   to="/templates"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                  className="inline-flex items-center gap-1.5 rounded-none border border-white/20 px-3 py-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
                 >
                   ← Все шаблоны WebIK
                 </Link>
