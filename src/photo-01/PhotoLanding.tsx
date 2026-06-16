@@ -31,13 +31,19 @@ const PHOTOS = {
   heroWide: { src: `/photo-01/hero-wide.jpg?v=${ASSET_V}`, label: "Коллаж работ", ratio: "16 / 9" },
   heroTall: { src: `/photo-01/hero-tall.jpg?v=${ASSET_V}`, label: "Коллаж работ", ratio: "9 / 16" },
   intro: { src: `/photo-01/intro.jpg?v=${ASSET_V}`, label: "Плёночная камера на столе", ratio: "16 / 9" },
-  // Работы — вертикальные 9:16, на мобайле во весь экран с текстом поверх
+  // Работы — вертикальные 9:16 (мобайл) и широкие 16:9 (десктоп), во весь экран
   flight: { src: `/photo-01/flight.jpg?v=${ASSET_V}`, label: "Полёт", ratio: "9 / 16" },
   greenery: { src: `/photo-01/greenery.jpg?v=${ASSET_V}`, label: "Среди зелени", ratio: "9 / 16" },
   character: { src: `/photo-01/character.jpg?v=${ASSET_V}`, label: "Шляпа", ratio: "9 / 16" },
   rain: { src: `/photo-01/rain.jpg?v=${ASSET_V}`, label: "Город в каплях", ratio: "9 / 16" },
   gaze: { src: `/photo-01/gaze.jpg?v=${ASSET_V}`, label: "Взгляд", ratio: "9 / 16" },
   evening: { src: `/photo-01/evening.jpg?v=${ASSET_V}`, label: "Вечер за книгой", ratio: "9 / 16" },
+  flightWide: { src: `/photo-01/flight-wide.jpg?v=${ASSET_V}`, label: "Полёт", ratio: "16 / 9" },
+  greeneryWide: { src: `/photo-01/greenery-wide.jpg?v=${ASSET_V}`, label: "Среди зелени", ratio: "16 / 9" },
+  characterWide: { src: `/photo-01/character-wide.jpg?v=${ASSET_V}`, label: "Шляпа", ratio: "16 / 9" },
+  rainWide: { src: `/photo-01/rain-wide.jpg?v=${ASSET_V}`, label: "Город в каплях", ratio: "16 / 9" },
+  gazeWide: { src: `/photo-01/gaze-wide.jpg?v=${ASSET_V}`, label: "Взгляд", ratio: "16 / 9" },
+  eveningWide: { src: `/photo-01/evening-wide.jpg?v=${ASSET_V}`, label: "Вечер за книгой", ratio: "16 / 9" },
   // О фотографе
   about: { src: `/photo-01/about.jpg?v=${ASSET_V}`, label: "Портрет фотографа", ratio: "4 / 5" },
 } satisfies Record<string, Photo>;
@@ -50,15 +56,26 @@ const reduceMotion =
 
 /* Фото, заполняющее родителя (родитель — relative overflow-hidden). Активная
    панель: лёгкий зум 1.08 → 1.0 (Ken Burns). Если src нет — серая заглушка. */
-function PhotoFill({ id, active = true }: { id: PhotoId; active?: boolean }) {
+function PhotoFill({
+  id,
+  active = true,
+  className = "",
+  position,
+}: {
+  id: PhotoId;
+  active?: boolean;
+  className?: string;
+  position?: string;
+}) {
   const p = PHOTOS[id];
-  if (!p.src) return <div className="absolute inset-0" style={{ backgroundColor: NEWSPRINT }} />;
+  if (!p.src) return <div className={`absolute inset-0 ${className}`} style={{ backgroundColor: NEWSPRINT }} />;
   return (
     <motion.img
       src={p.src}
       alt={p.label}
       decoding="async"
-      className="absolute inset-0 h-full w-full object-cover"
+      className={`absolute inset-0 h-full w-full object-cover ${className}`}
+      style={position ? { objectPosition: position } : undefined}
       initial={false}
       animate={{ scale: reduceMotion ? 1 : active ? 1 : 1.08 }}
       transition={{ duration: reduceMotion ? 0 : 1.5, ease: [0.16, 1, 0.3, 1] }}
@@ -98,14 +115,15 @@ const PILL_GHOST = `inline-flex ${PILL_BASE}`;
 const PILL_BASE_W =
   "items-center rounded-none border border-white/80 px-4 py-2 text-[15px] sm:text-base text-white transition-colors hover:bg-white hover:text-black";
 
-/* Данные секций. desc — короткое описание, выводится прямо на фото. */
-const WORKS: { id: PhotoId; cat: string; title: string; desc: string; year: string }[] = [
-  { id: "flight", cat: "Движение", title: "Полёт", desc: "Свет, прыжок и доля секунды между ними.", year: "2025" },
-  { id: "greenery", cat: "Портрет", title: "Среди зелени", desc: "Портрет в оранжерее, утренний свет сквозь листья.", year: "2025" },
-  { id: "character", cat: "Характер", title: "Шляпа", desc: "Фактуры, руки и жест — портрет без лица.", year: "2024" },
-  { id: "rain", cat: "История", title: "Город в каплях", desc: "Силуэт за мокрым стеклом и огни ночного города.", year: "2024" },
-  { id: "gaze", cat: "Портрет", title: "Взгляд", desc: "Тёплый контровый свет и дым в кадре.", year: "2024" },
-  { id: "evening", cat: "История", title: "Вечер за книгой", desc: "Тихий час при свете настольной лампы.", year: "2023" },
+/* Данные секций. desc — короткое описание прямо на фото. id — вертикальное фото
+   (мобайл), wide — широкое 16:9 (десктоп); если wide нет, на десктопе берётся id. */
+const WORKS: { id: PhotoId; wide?: PhotoId; cat: string; title: string; desc: string; year: string }[] = [
+  { id: "flight", wide: "flightWide", cat: "Движение", title: "Полёт", desc: "Свет, прыжок и доля секунды между ними.", year: "2025" },
+  { id: "greenery", wide: "greeneryWide", cat: "Портрет", title: "Среди зелени", desc: "Портрет в оранжерее, утренний свет сквозь листья.", year: "2025" },
+  { id: "character", wide: "characterWide", cat: "Характер", title: "Шляпа", desc: "Фактуры, руки и жест — портрет без лица.", year: "2024" },
+  { id: "rain", wide: "rainWide", cat: "История", title: "Город в каплях", desc: "Силуэт за мокрым стеклом и огни ночного города.", year: "2024" },
+  { id: "gaze", wide: "gazeWide", cat: "Портрет", title: "Взгляд", desc: "Тёплый контровый свет и дым в кадре.", year: "2024" },
+  { id: "evening", wide: "eveningWide", cat: "История", title: "Вечер за книгой", desc: "Тихий час при свете настольной лампы.", year: "2023" },
 ];
 
 const SERVICES = [
@@ -286,22 +304,43 @@ export default function PhotoLanding() {
                 "linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 26%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.8) 100%)",
             }}
           />
-          {/* Имя */}
-          <div className="absolute inset-x-0 bottom-0 z-10">
-            <div className={`${WRAP} pb-14 sm:pb-20`}>
+          {/* Имя — сверху слева; фамилия выезжает вертикально вниз из-под имени */}
+          <div className="absolute inset-x-0 top-0 z-10">
+            <div className={`${WRAP} pt-20 sm:pt-24`}>
               <span className="text-[13px] uppercase tracking-[0.2em] text-white/85">
                 Фотограф · портрет и истории
               </span>
               <h1
                 className="mt-3 text-white"
-                style={{ fontWeight: 400, fontSize: "clamp(3.6rem, 13vw, 11rem)", letterSpacing: "-0.04em", lineHeight: 0.88 }}
+                style={{ fontWeight: 400, fontSize: "clamp(3.4rem, 12vw, 9rem)", letterSpacing: "-0.04em", lineHeight: 0.9 }}
               >
-                <span className="block">Артём</span>
-                <span className="block">Волков</span>
+                Артём
               </h1>
-              {/* Подсказка прокрутки */}
+              {/* Волков — вертикально, выезжает вниз из-под имени, по левому краю (вровень с «А») */}
+              <div className="mt-1 overflow-hidden">
+                <motion.span
+                  className="inline-block text-white"
+                  style={{
+                    writingMode: "vertical-rl",
+                    fontWeight: 400,
+                    fontSize: "clamp(2.2rem, 9vh, 6rem)",
+                    letterSpacing: "-0.04em",
+                    lineHeight: 0.9,
+                  }}
+                  initial={reduceMotion ? false : { y: "-100%" }}
+                  animate={reduceMotion ? undefined : { y: "0%" }}
+                  transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  Волков
+                </motion.span>
+              </div>
+            </div>
+          </div>
+          {/* Подсказка прокрутки — снизу слева */}
+          <div className="absolute inset-x-0 bottom-0 z-10">
+            <div className={`${WRAP} pb-10 sm:pb-14`}>
               <motion.div
-                className="mt-7 inline-flex items-center gap-2 text-[13px] uppercase tracking-[0.18em] text-white/80"
+                className="inline-flex items-center gap-2 text-[13px] uppercase tracking-[0.18em] text-white/80"
                 animate={reduceMotion ? undefined : { x: [0, 10, 0] }}
                 transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
               >
@@ -346,52 +385,33 @@ export default function PhotoLanding() {
           </div>
         </Panel>
 
-        {/* 2–7 — Работы. Мобайл: фото 9:16 во весь экран + описание поверх фото.
-            Десктоп: фото слева, подпись с описанием справа. */}
+        {/* 2–7 — Работы: фото во весь экран (мобайл 9:16, десктоп 16:9), описание поверх фото */}
         {WORKS.map((w, i) => {
           const active = index === 2 + i;
           return (
             <Panel key={w.id} bg="#000000" dark>
-              {/* МОБАЙЛ */}
-              <div className="relative h-full w-full lg:hidden">
-                <PhotoFill id={w.id} active={active} />
-                <div
-                  className="absolute inset-0"
-                  style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 28%, rgba(0,0,0,0) 42%, rgba(0,0,0,0.85) 100%)" }}
-                />
-                <div className="absolute inset-x-0 bottom-0">
-                  <div className={`${WRAP} pb-16`}>
-                    <Reveal>
-                      <span className="text-[13px] uppercase tracking-[0.16em]" style={{ color: RED }}>{w.cat}</span>
-                      <h2 className="mt-3 text-[clamp(2.6rem,12vw,4rem)]" style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.96 }}>
-                        {w.title}
-                      </h2>
-                      <p className="mt-3 max-w-[32ch] text-[16px] leading-[1.4] text-white/85">{w.desc}</p>
-                      <div className="mt-4 flex items-center gap-3 text-[13px] text-white/60">
-                        <span>{w.year}</span>
-                        <span className="h-px w-8 bg-white/30" />
-                        <span>{two(i + 1)} / {two(WORKS.length)}</span>
-                      </div>
-                    </Reveal>
-                  </div>
-                </div>
-              </div>
-
-              {/* ДЕСКТОП */}
-              <div className="hidden h-full w-full lg:flex">
-                <div className="relative h-full w-[58%] overflow-hidden">
-                  <PhotoFill id={w.id} active={active} />
-                </div>
-                <div className="flex flex-1 flex-col justify-center bg-white px-14 text-black">
+              <PhotoFill id={w.id} active={active} className="lg:hidden" />
+              <PhotoFill
+                id={w.wide ?? w.id}
+                active={active}
+                className="hidden lg:block"
+                position={w.wide ? undefined : "50% 22%"}
+              />
+              <div
+                className="absolute inset-0"
+                style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.25) 34%, rgba(0,0,0,0) 62%)" }}
+              />
+              <div className="absolute inset-x-0 bottom-0">
+                <div className={`${WRAP} pb-16 sm:pb-20`}>
                   <Reveal>
                     <span className="text-[13px] uppercase tracking-[0.16em]" style={{ color: RED }}>{w.cat}</span>
-                    <h2 className="mt-4 text-[clamp(2.4rem,4vw,4rem)]" style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.96 }}>
+                    <h2 className="mt-3 text-white text-[clamp(2.6rem,8vw,5rem)]" style={{ fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 0.96 }}>
                       {w.title}
                     </h2>
-                    <p className="mt-5 max-w-[34ch] text-[18px] leading-[1.45] text-black/70">{w.desc}</p>
-                    <div className="mt-6 flex items-center gap-3 text-[14px] text-[#8c8c8c]">
+                    <p className="mt-3 max-w-[42ch] text-[16px] leading-[1.45] text-white/85 sm:text-[18px]">{w.desc}</p>
+                    <div className="mt-4 flex items-center gap-3 text-[13px] text-white/60">
                       <span>{w.year}</span>
-                      <span className="h-px w-8 bg-[#cfcfcf]" />
+                      <span className="h-px w-8 bg-white/30" />
                       <span>{two(i + 1)} / {two(WORKS.length)}</span>
                     </div>
                   </Reveal>
