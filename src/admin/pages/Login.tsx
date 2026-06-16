@@ -20,7 +20,16 @@ export default function Login() {
     setSubmitting(true);
     const { error: err } = await signIn(email.trim(), password);
     setSubmitting(false);
-    if (err) setError("Не удалось войти. Проверьте email и пароль.");
+    if (err) {
+      const low = err.toLowerCase();
+      if (low.includes("email not confirmed")) {
+        setError("Email не подтверждён. В Supabase → Authentication → Users подтвердите пользователя (или создайте заново с галочкой Auto Confirm User).");
+      } else if (low.includes("invalid login credentials")) {
+        setError("Неверный email или пароль.");
+      } else {
+        setError(`Не удалось войти: ${err}`);
+      }
+    }
     // при успехе onAuthStateChange обновит сессию → Navigate выше
   }
 
