@@ -70,7 +70,8 @@ create table if not exists public.categories (
   id       uuid primary key default gen_random_uuid(),
   user_id  uuid not null default auth.uid() references auth.users (id) on delete cascade,
   type     text not null check (type in ('expense','income')),
-  name     text not null
+  name     text not null,
+  unique (user_id, type, name)   -- защита от дублей + идемпотентный сид через upsert
 );
 
 -- Цели по доходу (план на конкретный месяц)
