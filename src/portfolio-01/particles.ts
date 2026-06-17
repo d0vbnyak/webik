@@ -149,19 +149,7 @@ export function createParticleScene(
   const colorNear = opts.colorNear ?? [0.78, 1.0, 0.0]; // лайм #c6ff00
   const colorFar = opts.colorFar ?? [0.62, 0.5, 0.95]; // фиолет
 
-  // ── программа ─────────────────────────────────────────────────────────────
-  const vs = compile(gl, gl.VERTEX_SHADER, VERT_SRC);
-  const fs = compile(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
-  if (!vs || !fs) return null;
-  const prog = gl.createProgram();
-  if (!prog) return null;
-  gl.attachShader(prog, vs);
-  gl.attachShader(prog, fs);
-  gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
-  gl.useProgram(prog);
-
-  // ── формы, между которыми морфим ───────────────────────────────────────────
+  // ── формы и сиды: CPU-данные, переживают потерю GL-контекста ────────────────
   const shapes: Float32Array[] = [
     spherePoints(count, 1.75),
     torusPoints(count, 1.3, 0.52),
@@ -172,43 +160,81 @@ export function createParticleScene(
   const seeds = new Float32Array(count);
   for (let i = 0; i < count; i++) seeds[i] = hash01(i);
 
-  // ── буферы ─────────────────────────────────────────────────────────────────
-  const bufA = gl.createBuffer();
-  const bufB = gl.createBuffer();
-  const bufSeed = gl.createBuffer();
-  if (!bufA || !bufB || !bufSeed) return null;
-
   let cur = 0;
   const next = () => (cur + 1) % shapes.length;
 
-  gl.bindBuffer(gl.ARRAY_BUFFER, bufA);
-  gl.bufferData(gl.ARRAY_BUFFER, shapes[cur], gl.DYNAMIC_DRAW);
-  gl.bindBuffer(gl.ARRAY_BUFFER, bufB);
-  gl.bufferData(gl.ARRAY_BUFFER, shapes[next()], gl.DYNAMIC_DRAW);
-  gl.bindBuffer(gl.ARRAY_BUFFER, bufSeed);
-  gl.bufferData(gl.ARRAY_BUFFER, seeds, gl.STATIC_DRAW);
+  // ── GL-ресурсы: пересоздаются при восстановлении контекста ───────────────────
+  let vs: WebGLShader | null = null;
+  let fs: WebGLShader | null = null;
+  let prog: WebGLProgram | null = null;
+  let bufA: WebGLBuffer | null = null;
+  let bufB: WebGLBuffer | null = null;
+  let bufSeed: WebGLBuffer | null = null;
+  let aPosA = -1;
+  let aPosB = -1;
+  let aSeed = -1;
+  let uProj: WebGLUniformLocation | null = null;
+  let uView: WebGLUniformLocation | null = null;
+  let uMorph: WebGLUniformLocation | null = null;
+  let uTime: WebGLUniformLocation | null = null;
+  let uPointer: WebGLUniformLocation | null = null;
+  let uActive: WebGLUniformLocation | null = null;
+  let uDpr: WebGLUniformLocation | null = null;
+  let uColorNear: WebGLUniformLocation | null = null;
+  let uColorFar: WebGLUniformLocation | null = null;
 
-  const aPosA = gl.getAttribLocation(prog, "aPosA");
-  const aPosB = gl.getAttribLocation(prog, "aPosB");
-  const aSeed = gl.getAttribLocation(prog, "aSeed");
+  /** Создаёт программу, буферы и локации. Вызывается при инициализации и при
+   *  webglcontextrestored. Возвращает false при неудаче. */
+  function buildGLResources(): boolean {
+    vs = compile(gl, gl.VERTEX_SHADER, VERT_SRC);
+    fs = compile(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
+    if (!vs || !fs) return false;
+    const p = gl.createProgram();
+    if (!p) return false;
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) return false;
+    prog = p;
+    gl.useProgram(prog);
 
-  const uProj = gl.getUniformLocation(prog, "uProj");
-  const uView = gl.getUniformLocation(prog, "uView");
-  const uMorph = gl.getUniformLocation(prog, "uMorph");
-  const uTime = gl.getUniformLocation(prog, "uTime");
-  const uPointer = gl.getUniformLocation(prog, "uPointer");
-  const uActive = gl.getUniformLocation(prog, "uActive");
-  const uDpr = gl.getUniformLocation(prog, "uDpr");
-  const uColorNear = gl.getUniformLocation(prog, "uColorNear");
-  const uColorFar = gl.getUniformLocation(prog, "uColorFar");
+    bufA = gl.createBuffer();
+    bufB = gl.createBuffer();
+    bufSeed = gl.createBuffer();
+    if (!bufA || !bufB || !bufSeed) return false;
 
-  gl.uniform3fv(uColorNear, colorNear);
-  gl.uniform3fv(uColorFar, colorFar);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufA);
+    gl.bufferData(gl.ARRAY_BUFFER, shapes[cur], gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufB);
+    gl.bufferData(gl.ARRAY_BUFFER, shapes[next()], gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufSeed);
+    gl.bufferData(gl.ARRAY_BUFFER, seeds, gl.STATIC_DRAW);
 
-  gl.enable(gl.BLEND);
-  // обычный альфа-блендинг: чёткие точки без пересвета в белое
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-  gl.disable(gl.DEPTH_TEST);
+    aPosA = gl.getAttribLocation(prog, "aPosA");
+    aPosB = gl.getAttribLocation(prog, "aPosB");
+    aSeed = gl.getAttribLocation(prog, "aSeed");
+
+    uProj = gl.getUniformLocation(prog, "uProj");
+    uView = gl.getUniformLocation(prog, "uView");
+    uMorph = gl.getUniformLocation(prog, "uMorph");
+    uTime = gl.getUniformLocation(prog, "uTime");
+    uPointer = gl.getUniformLocation(prog, "uPointer");
+    uActive = gl.getUniformLocation(prog, "uActive");
+    uDpr = gl.getUniformLocation(prog, "uDpr");
+    uColorNear = gl.getUniformLocation(prog, "uColorNear");
+    uColorFar = gl.getUniformLocation(prog, "uColorFar");
+
+    gl.uniform3fv(uColorNear, colorNear);
+    gl.uniform3fv(uColorFar, colorFar);
+
+    gl.enable(gl.BLEND);
+    // обычный альфа-блендинг: чёткие точки без пересвета в белое
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.disable(gl.DEPTH_TEST);
+    return true;
+  }
+
+  if (!buildGLResources()) return null;
 
   // ── состояние ──────────────────────────────────────────────────────────────
   let dpr = Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
@@ -225,6 +251,7 @@ export function createParticleScene(
   let raf = 0;
   let running = false;
   let disposed = false;
+  let contextLost = false;
 
   function resize() {
     const w = Math.max(1, canvas.clientWidth);
@@ -283,7 +310,10 @@ export function createParticleScene(
   }
 
   function frame(nowMs: number) {
-    if (disposed) return;
+    if (disposed || contextLost || gl.isContextLost()) {
+      running = false;
+      return;
+    }
     const time = nowMs / 1000;
     if (!started) {
       started = true;
@@ -306,13 +336,28 @@ export function createParticleScene(
     raf = requestAnimationFrame(frame);
   }
 
-  // потеря/восстановление контекста — не роняем страницу
+  // потеря/восстановление контекста — герой переживает спящий GPU и т.п.
   const onLost = (e: Event) => {
-    e.preventDefault();
-    cancelAnimationFrame(raf);
+    e.preventDefault(); // обязательно, иначе контекст не восстановят
+    contextLost = true;
     running = false;
+    cancelAnimationFrame(raf);
+  };
+  const onRestored = () => {
+    contextLost = false;
+    if (disposed) return;
+    if (!buildGLResources()) return; // не вышло — останется прозрачный фолбэк
+    resize();
+    if (reduced) {
+      draw(0, 0);
+    } else if (!running) {
+      running = true;
+      started = false;
+      raf = requestAnimationFrame(frame);
+    }
   };
   canvas.addEventListener("webglcontextlost", onLost, false);
+  canvas.addEventListener("webglcontextrestored", onRestored, false);
 
   let ro: ResizeObserver | null = null;
   if (typeof ResizeObserver !== "undefined") {
@@ -336,7 +381,7 @@ export function createParticleScene(
     },
     setActive(on: boolean) {
       // пауза/возобновление цикла по видимости героя (экономия батареи)
-      if (reduced || disposed) return;
+      if (reduced || disposed || contextLost) return;
       if (on && !running) {
         running = true;
         started = false;
@@ -355,6 +400,7 @@ export function createParticleScene(
       running = false;
       cancelAnimationFrame(raf);
       canvas.removeEventListener("webglcontextlost", onLost, false);
+      canvas.removeEventListener("webglcontextrestored", onRestored, false);
       ro?.disconnect();
       gl.deleteBuffer(bufA);
       gl.deleteBuffer(bufB);

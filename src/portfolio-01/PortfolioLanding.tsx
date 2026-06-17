@@ -18,7 +18,7 @@ import {
   useTransform,
 } from "motion/react";
 import { createParticleScene, type ParticleScene } from "./particles";
-import { clamp, magneticOffset } from "./lib";
+import { clamp, magneticOffset, pluralRu } from "./lib";
 
 /* ──────────────────────────────────────────────────────────────────────────
    Шаблон «Портфолио моушн/3D-дизайнера» (portfolio-01)
@@ -36,6 +36,8 @@ const INK = "#07070a";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
+// Снимок на момент загрузки — намеренно: WebGL-движку нужно значение при
+// создании сцены. Реактивные компоненты дополнительно используют useReducedMotion().
 const prefersReducedMotion =
   typeof window !== "undefined" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -125,6 +127,58 @@ function scrollToId(id: string) {
   el.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
 }
 
+/* ── Доступность модалок: захват/возврат фокуса, Tab-trap, Escape, лок скролла ─ */
+
+function useDialogA11y(onClose: () => void) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = ref.current;
+    const prevFocused = document.activeElement as HTMLElement | null;
+    const focusables = () =>
+      node
+        ? Array.from(
+            node.querySelectorAll<HTMLElement>(
+              'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            ),
+          ).filter((el) => el.getClientRects().length > 0)
+        : [];
+    // фокус внутрь диалога (на первый фокусируемый, иначе на контейнер)
+    (focusables()[0] ?? node)?.focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key === "Tab") {
+        const f = focusables();
+        if (f.length === 0) {
+          e.preventDefault();
+          node?.focus();
+          return;
+        }
+        const idx = f.indexOf(document.activeElement as HTMLElement);
+        if (e.shiftKey && idx <= 0) {
+          e.preventDefault();
+          f[f.length - 1].focus();
+        } else if (!e.shiftKey && idx === f.length - 1) {
+          e.preventDefault();
+          f[0].focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+      prevFocused?.focus?.(); // вернуть фокус на карточку-триггер
+    };
+  }, [onClose]);
+  return ref;
+}
+
 /* ── Кастомный курсор (десктоп, без touch / reduced-motion) ──────────────── */
 
 function CustomCursor() {
@@ -202,6 +256,8 @@ function Magnetic({
     y.set(0);
   };
 
+  // any здесь намеренно: полиморфный тег (button/a/div) с произвольными
+  // пропсами (href/onClick) не выражается строго без тяжёлых дженериков.
   const Comp: any = motion[as];
   return (
     <Comp
@@ -408,24 +464,17 @@ function ProjectCard({
 /* ── Полноэкранный кейс (морфинг из карточки) ─────────────────────────────── */
 
 function ProjectCase({ project, onClose }: { project: Project; onClose: () => void }) {
-  const closeRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
+  const dialogRef = useDialogA11y(onClose);
 
   return (
-    <div className="fixed inset-0 z-[90] overflow-y-auto" role="dialog" aria-modal="true" aria-label={`Кейс ${project.title}`}>
+    <div
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-[90] overflow-y-auto outline-none"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Кейс ${project.title}`}
+    >
       <motion.div
         className="absolute inset-0 bg-black/70 backdrop-blur-md"
         initial={{ opacity: 0 }}
@@ -499,7 +548,6 @@ function ProjectCase({ project, onClose }: { project: Project; onClose: () => vo
       </div>
 
       <motion.button
-        ref={closeRef}
         type="button"
         onClick={onClose}
         initial={{ opacity: 0 }}
@@ -527,7 +575,9 @@ function Works({ onOpen }: { onOpen: (p: Project) => void }) {
             <br />
             <span className="text-white/40">работы</span>
           </h2>
-          <span className="hidden sm:block text-sm text-white/40">{PROJECTS.length} проекта</span>
+          <span className="hidden sm:block text-sm text-white/40">
+            {PROJECTS.length} {pluralRu(PROJECTS.length, ["проект", "проекта", "проектов"])}
+          </span>
         </div>
       </Reveal>
 
@@ -543,6 +593,50 @@ function Works({ onOpen }: { onOpen: (p: Project) => void }) {
 }
 
 /* ── Секция «Шоурил» ──────────────────────────────────────────────────────── */
+
+function ReelModal({ onClose }: { onClose: () => void }) {
+  const dialogRef = useDialogA11y(onClose);
+  const reduce = useReducedMotion();
+  return (
+    <div
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-[90] flex items-center justify-center p-4 outline-none"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Шоурил"
+    >
+      <motion.div
+        className="absolute inset-0 bg-black/80 backdrop-blur-md"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      />
+      <motion.div layoutId="reel-art" className="relative aspect-video w-full max-w-5xl overflow-hidden" style={{ borderRadius: 24 }}>
+        <div className="absolute inset-0" style={{ background: `linear-gradient(120deg, ${INK}, #14122a 60%, #0a1a12)` }} />
+        <motion.div
+          className="absolute -inset-1/3 blur-3xl"
+          style={{ background: `conic-gradient(from 0deg, ${LIME}, ${VIOLET}, #5ad1ff, ${LIME})`, opacity: 0.4 }}
+          animate={reduce ? undefined : { rotate: 360 }}
+          transition={{ duration: 26, ease: "linear", repeat: Infinity }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="font-display text-xl sm:text-2xl text-white/80">Здесь будет видео-шоурил</span>
+        </div>
+      </motion.div>
+      <button
+        type="button"
+        onClick={onClose}
+        data-hover
+        className="absolute right-4 top-4 z-[95] flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-black/40 text-white backdrop-blur-md hover:bg-white hover:text-black transition-colors"
+        aria-label="Закрыть шоурил"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
 
 function Reel() {
   const [hover, setHover] = useState(false);
@@ -591,38 +685,7 @@ function Reel() {
       </Reveal>
 
       <AnimatePresence>
-        {open && (
-          <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Шоурил">
-            <motion.div
-              className="absolute inset-0 bg-black/80 backdrop-blur-md"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setOpen(false)}
-            />
-            <motion.div layoutId="reel-art" className="relative aspect-video w-full max-w-5xl overflow-hidden" style={{ borderRadius: 24 }}>
-              <div className="absolute inset-0" style={{ background: `linear-gradient(120deg, ${INK}, #14122a 60%, #0a1a12)` }} />
-              <motion.div
-                className="absolute -inset-1/3 blur-3xl"
-                style={{ background: `conic-gradient(from 0deg, ${LIME}, ${VIOLET}, #5ad1ff, ${LIME})`, opacity: 0.4 }}
-                animate={reduce ? undefined : { rotate: 360 }}
-                transition={{ duration: 26, ease: "linear", repeat: Infinity }}
-              />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="font-display text-xl sm:text-2xl text-white/80">Здесь будет видео-шоурил</span>
-              </div>
-            </motion.div>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              data-hover
-              className="absolute right-4 top-4 z-[95] flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-black/40 text-white backdrop-blur-md hover:bg-white hover:text-black transition-colors"
-              aria-label="Закрыть шоурил"
-            >
-              ✕
-            </button>
-          </div>
-        )}
+        {open && <ReelModal onClose={() => setOpen(false)} />}
       </AnimatePresence>
     </section>
   );

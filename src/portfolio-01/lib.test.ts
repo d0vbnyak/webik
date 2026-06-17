@@ -5,6 +5,7 @@ import {
   smoothstep,
   easeOutCubic,
   mapRange,
+  pluralRu,
   mat4Identity,
   mat4Multiply,
   mat4Perspective,
@@ -50,6 +51,18 @@ describe("scalar helpers", () => {
     expect(mapRange(5, 0, 10, 0, 100)).toBe(50);
     expect(mapRange(0, 0, 10, -1, 1)).toBe(-1);
     expect(mapRange(10, 0, 10, -1, 1)).toBe(1);
+  });
+
+  it("pluralRu склоняет по русским правилам", () => {
+    const f: [string, string, string] = ["проект", "проекта", "проектов"];
+    expect(pluralRu(1, f)).toBe("проект");
+    expect(pluralRu(2, f)).toBe("проекта");
+    expect(pluralRu(4, f)).toBe("проекта");
+    expect(pluralRu(5, f)).toBe("проектов");
+    expect(pluralRu(11, f)).toBe("проектов"); // 11–14 — исключение
+    expect(pluralRu(21, f)).toBe("проект");
+    expect(pluralRu(22, f)).toBe("проекта");
+    expect(pluralRu(25, f)).toBe("проектов");
   });
 });
 

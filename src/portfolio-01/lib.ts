@@ -28,6 +28,16 @@ export const mapRange = (
   outMax: number,
 ): number => outMin + ((v - inMin) / (inMax - inMin)) * (outMax - outMin);
 
+/** Русское склонение по числу: forms = [для 1, для 2–4, для 5+]. */
+export function pluralRu(n: number, forms: [string, string, string]): string {
+  const a = Math.abs(n) % 100;
+  const b = a % 10;
+  if (a > 10 && a < 20) return forms[2];
+  if (b > 1 && b < 5) return forms[1];
+  if (b === 1) return forms[0];
+  return forms[2];
+}
+
 // ── mat4 (column-major, как в WebGL) ───────────────────────────────────────
 
 export type Mat4 = Float32Array;
