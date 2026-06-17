@@ -13,6 +13,7 @@ import NotFound from "./pages/NotFound";
 // Лендинги-шаблоны — крупные компоненты, грузим лениво (не нужны на остальных страницах)
 const CoffeeLanding = lazy(() => import("./coffe-01/CoffeeLanding"));
 const PhotoLanding = lazy(() => import("./photo-01/PhotoLanding"));
+const PortfolioLanding = lazy(() => import("./portfolio-01/PortfolioLanding"));
 // Закрытая админ-панель — отдельный раздел, грузим лениво (на публичный сайт не влияет)
 const AdminApp = lazy(() => import("./admin/AdminApp"));
 
@@ -56,6 +57,15 @@ export default function App() {
           element={
             <Suspense fallback={<div className="min-h-screen bg-white" />}>
               <PhotoLanding />
+            </Suspense>
+          }
+        />
+        {/* Шаблон портфолио моушн/3D — полноэкранный, тёмный, без общего лейаута; грузится лениво */}
+        <Route
+          path="/templates/portfolio-01"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-[#07070a]" />}>
+              <PortfolioLanding />
             </Suspense>
           }
         />

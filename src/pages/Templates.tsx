@@ -19,7 +19,13 @@ const TEMPLATES: Tpl[] = [
     image: "/coffe-01/preview.jpg?v=2",
   },
   { name: "Интернет-магазин", category: "e-commerce" },
-  { name: "Портфолио", category: "креатив" },
+  {
+    name: "Портфолио",
+    category: "креатив",
+    ready: true,
+    href: "/templates/portfolio-01",
+    image: "/portfolio-01/preview.jpg?v=1",
+  },
   { name: "Корпоративный сайт", category: "бизнес" },
   { name: "Салон красоты", category: "услуги" },
   { name: "Фитнес-клуб", category: "спорт" },
@@ -124,18 +130,68 @@ function SkeletonPreview({ variant, accent }: { variant: number; accent: string 
   );
 }
 
+/** Стеклянный баннер-приглашение к индивидуальной разработке */
+function CustomSiteBanner() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-40px" }}
+      transition={{ duration: 0.5 }}
+      className="relative mt-12 md:mt-16 overflow-hidden rounded-3xl border border-black/[0.05] shadow-[0_12px_40px_-14px_rgba(20,20,20,0.18)]"
+    >
+      {/* Светлая подложка + мягкие пастельные пятна — фон под матовым стеклом */}
+      <div aria-hidden="true" className="absolute inset-0">
+        <div className="absolute inset-0 bg-white" />
+        <div className="absolute -top-20 -left-12 w-60 h-60 rounded-full bg-[#c7b9ff]/40 blur-3xl" />
+        <div className="absolute -bottom-24 right-4 w-72 h-72 rounded-full bg-[#c7b9ff]/45 blur-3xl" />
+        <div className="absolute top-6 left-1/2 w-48 h-48 rounded-full bg-[#a5d8ff]/40 blur-3xl" />
+      </div>
+
+      {/* Матовая стеклянная панель */}
+      <div className="relative m-1.5 sm:m-2 rounded-[1.4rem] border border-white/70 bg-white/40 backdrop-blur-2xl px-6 py-8 sm:px-10 sm:py-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between sm:gap-10">
+          <div className="max-w-xl">
+            <span className="inline-flex items-center gap-2 text-[11px] uppercase tracking-widest text-[#1a1a1a]/70">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-green" />
+              индивидуальная разработка
+            </span>
+            <h2 className="mt-3 font-display font-medium tracking-tight text-2xl sm:text-3xl leading-[1.15] text-[#1a1a1a]">
+              Нет подходящего шаблона для будущего сайта?
+            </h2>
+            <p className="mt-2 text-sm sm:text-base leading-relaxed text-[#1a1a1a]/70">
+              Сделаем индивидуальный — просто напишите нам.
+            </p>
+          </div>
+
+          <a
+            href="mailto:hello@webik.ru"
+            className="group/btn inline-flex shrink-0 items-center justify-center gap-2 self-start sm:self-auto rounded-full border border-white/80 bg-white/60 backdrop-blur-md px-6 py-3 text-sm lowercase font-medium text-[#1a1a1a] shadow-[0_8px_24px_-8px_rgba(20,20,20,0.28),inset_0_1px_0_rgba(255,255,255,0.9)] hover:bg-white/85 transition-colors whitespace-nowrap"
+          >
+            написать нам
+            <span aria-hidden="true" className="transition-transform duration-300 group-hover/btn:translate-x-0.5">
+              →
+            </span>
+          </a>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function Templates() {
   return (
     <section className="relative bg-bg-base pb-24 md:pb-32 overflow-hidden">
       <PageHeader
         title="Шаблоны"
         accent="вашего будущего сайта."
-        subtitle="20 готовых направлений: выбирайте основу — а мы адаптируем дизайн, тексты и функциональность под ваш бренд. Два шаблона уже готовы — откройте «Лендинг кафе» или «Сайт фотографа»."
+        subtitle="20 готовых направлений: выбирайте основу — а мы адаптируем дизайн, тексты и функциональность под ваш бренд. Три шаблона уже готовы — откройте «Лендинг кафе», «Сайт фотографа» или «Портфолио»."
       />
 
       <div className="max-w-7xl mx-auto px-8 md:px-16 lg:px-20 grid grid-cols-12 gap-x-4 md:gap-x-8">
         <div className="col-span-12 md:col-span-10 md:col-start-2">
-          <div className="mt-14 md:mt-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
+          <CustomSiteBanner />
+          <div className="mt-8 md:mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
             {TEMPLATES.map((tpl, i) => {
               const card = (
                 <motion.article
