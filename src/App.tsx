@@ -7,6 +7,7 @@ import Home from "./pages/Home";
 import About from "./pages/About";
 import Templates from "./pages/Templates";
 import Capabilities from "./pages/Capabilities";
+import Prices from "./pages/Prices";
 import Works from "./pages/Works";
 import NotFound from "./pages/NotFound";
 
@@ -28,6 +29,7 @@ function SiteLayout() {
           <Route path="/about" element={<About />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/capabilities" element={<Capabilities />} />
+          <Route path="/prices" element={<Prices />} />
           <Route path="/works" element={<Works />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

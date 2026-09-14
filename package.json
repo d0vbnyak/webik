@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.server.json && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "@supabase/supabase-js": "^2.108.2",
     "@tailwindcss/vite": "^4.1.0",
     "motion": "^12.0.0",
@@ -21,6 +22,7 @@
     "tailwindcss": "^4.1.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",

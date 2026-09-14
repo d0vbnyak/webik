@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { to: "/about", label: "о нас" },
   { to: "/templates", label: "шаблоны" },
   { to: "/capabilities", label: "возможности" },
+  { to: "/prices", label: "цены" },
   { to: "/works", label: "другие работы" },
 ];
 
