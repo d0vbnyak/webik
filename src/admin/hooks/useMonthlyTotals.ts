@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { db } from "../lib/db";
 import { monthRange, monthShort } from "../lib/dates";
 
 export interface MonthlyPoint {
@@ -43,8 +43,8 @@ export function useMonthlyTotals(endYear: number, endMonth: number, count = 12) 
       const endExclusive = monthRange(endYear, endMonth).endExclusive;
 
       const [incRes, expRes] = await Promise.all([
-        supabase.from("incomes").select("date,amount").gte("date", start).lt("date", endExclusive),
-        supabase.from("expenses").select("date,amount").gte("date", start).lt("date", endExclusive),
+        db.from("incomes").select("date,amount").gte("date", start).lt("date", endExclusive),
+        db.from("expenses").select("date,amount").gte("date", start).lt("date", endExclusive),
       ]);
       if (cancelled) return;
       if (incRes.error || expRes.error) {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { db } from "../lib/db";
 import type { Client, NewClient } from "../lib/types";
 
 export function useClients() {
@@ -10,7 +10,7 @@ export function useClients() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: selErr } = await supabase
+    const { data, error: selErr } = await db
       .from("clients")
       .select("*")
       .order("name");
@@ -24,7 +24,7 @@ export function useClients() {
   }, [load]);
 
   const add = useCallback(async (payload: NewClient) => {
-    const { data, error: insErr } = await supabase
+    const { data, error: insErr } = await db
       .from("clients")
       .insert(payload)
       .select()
@@ -35,7 +35,7 @@ export function useClients() {
   }, []);
 
   const update = useCallback(async (id: string, patch: Partial<NewClient>) => {
-    const { data, error: updErr } = await supabase
+    const { data, error: updErr } = await db
       .from("clients")
       .update(patch)
       .eq("id", id)
@@ -49,7 +49,7 @@ export function useClients() {
   }, []);
 
   const remove = useCallback(async (id: string) => {
-    const { error: delErr } = await supabase.from("clients").delete().eq("id", id);
+    const { error: delErr } = await db.from("clients").delete().eq("id", id);
     if (delErr) return { error: delErr.message };
     setClients((prev) => prev.filter((c) => c.id !== id));
     return { error: null };

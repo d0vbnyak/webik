@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { db } from "../lib/db";
 import type { Income } from "../lib/types";
 
 /**
@@ -14,7 +14,7 @@ export function useReceivables() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: selErr } = await supabase
+    const { data, error: selErr } = await db
       .from("incomes")
       .select("*")
       .in("payment_status", ["unpaid", "partial"])
@@ -29,7 +29,7 @@ export function useReceivables() {
   }, [load]);
 
   const markPaid = useCallback(async (id: string, amount: number) => {
-    const { error: updErr } = await supabase
+    const { error: updErr } = await db
       .from("incomes")
       .update({ payment_status: "paid", paid_amount: amount })
       .eq("id", id);

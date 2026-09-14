@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { db } from "../lib/db";
 import type { Expense, NewExpense } from "../lib/types";
 import { monthRange } from "../lib/dates";
 import { onChange } from "../lib/dataBus";
@@ -14,7 +14,7 @@ export function useExpenses(year: number, month: number) {
     setLoading(true);
     setError(null);
     const { start, endExclusive } = monthRange(year, month);
-    const { data, error: selErr } = await supabase
+    const { data, error: selErr } = await db
       .from("expenses")
       .select("*")
       .gte("date", start)
@@ -33,7 +33,7 @@ export function useExpenses(year: number, month: number) {
   useEffect(() => onChange("expenses", () => void load()), [load]);
 
   const add = useCallback(async (payload: NewExpense) => {
-    const { error: insErr } = await supabase.from("expenses").insert(payload);
+    const { error: insErr } = await db.from("expenses").insert(payload);
     if (insErr) return { error: insErr.message };
     await load();
     return { error: null };
@@ -42,21 +42,21 @@ export function useExpenses(year: number, month: number) {
   /** Пакетное добавление (авто-списания повторяющихся расходов). */
   const addMany = useCallback(async (rows: NewExpense[]) => {
     if (rows.length === 0) return { error: null };
-    const { error: insErr } = await supabase.from("expenses").insert(rows);
+    const { error: insErr } = await db.from("expenses").insert(rows);
     if (insErr) return { error: insErr.message };
     await load();
     return { error: null };
   }, [load]);
 
   const update = useCallback(async (id: string, patch: Partial<NewExpense>) => {
-    const { error: updErr } = await supabase.from("expenses").update(patch).eq("id", id);
+    const { error: updErr } = await db.from("expenses").update(patch).eq("id", id);
     if (updErr) return { error: updErr.message };
     await load();
     return { error: null };
   }, [load]);
 
   const remove = useCallback(async (id: string) => {
-    const { error: delErr } = await supabase.from("expenses").delete().eq("id", id);
+    const { error: delErr } = await db.from("expenses").delete().eq("id", id);
     if (delErr) return { error: delErr.message };
     setExpenses((prev) => prev.filter((e) => e.id !== id));
     return { error: null };

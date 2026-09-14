@@ -32,6 +32,30 @@ function chatApi(mode: string): Plugin {
   };
 }
 
+/**
+ * API админки на dev-сервере: /api/* (кроме /api/chat) обслуживает server/dev.ts
+ * с локальной базой PGlite. В продакшене то же приложение запускает server/main.ts.
+ */
+function adminApi(mode: string): Plugin {
+  const autologin = loadEnv(mode, process.cwd(), "").DEV_AUTOLOGIN === "1";
+
+  return {
+    name: "webik-admin-api",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = req.url ?? "";
+        if (!url.startsWith("/api/") || url.startsWith("/api/chat")) return next();
+        server
+          .ssrLoadModule("/server/dev.ts")
+          .then((mod) => mod.getDevHandler({ autologin }))
+          .then((handle) => handle(req, res))
+          .catch(next);
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss(), chatApi(mode)],
+  plugins: [react(), tailwindcss(), chatApi(mode), adminApi(mode)],
 }));

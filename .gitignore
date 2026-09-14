@@ -24,3 +24,6 @@ public/coffe-01/*.mp4
 .dolt/
 *.db
 .beads-credential-key
+
+# Локальная база разработки (PGlite)
+.data/

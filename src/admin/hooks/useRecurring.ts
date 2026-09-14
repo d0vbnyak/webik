@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { db } from "../lib/db";
 import type { RecurringExpense, NewRecurringExpense } from "../lib/types";
 
 export function useRecurring() {
@@ -10,7 +10,7 @@ export function useRecurring() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: selErr } = await supabase
+    const { data, error: selErr } = await db
       .from("recurring_expenses")
       .select("*")
       .order("next_charge_date", { ascending: true });
@@ -24,14 +24,14 @@ export function useRecurring() {
   }, [load]);
 
   const add = useCallback(async (payload: NewRecurringExpense) => {
-    const { error: insErr } = await supabase.from("recurring_expenses").insert(payload);
+    const { error: insErr } = await db.from("recurring_expenses").insert(payload);
     if (insErr) return { error: insErr.message };
     await load();
     return { error: null };
   }, [load]);
 
   const update = useCallback(async (id: string, patch: Partial<NewRecurringExpense>) => {
-    const { data, error: updErr } = await supabase
+    const { data, error: updErr } = await db
       .from("recurring_expenses")
       .update(patch)
       .eq("id", id)
@@ -43,7 +43,7 @@ export function useRecurring() {
   }, []);
 
   const remove = useCallback(async (id: string) => {
-    const { error: delErr } = await supabase.from("recurring_expenses").delete().eq("id", id);
+    const { error: delErr } = await db.from("recurring_expenses").delete().eq("id", id);
     if (delErr) return { error: delErr.message };
     setRecurring((prev) => prev.filter((r) => r.id !== id));
     return { error: null };

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { db } from "../lib/db";
 import type { Category, CategoryType } from "../lib/types";
 
 const DEFAULTS: { type: CategoryType; name: string }[] = [
@@ -23,7 +23,7 @@ export function useCategories() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchAll = useCallback(async (): Promise<Category[] | null> => {
-    const { data, error: selErr } = await supabase
+    const { data, error: selErr } = await db
       .from("categories")
       .select("*")
       .order("name");
@@ -39,7 +39,7 @@ export function useCategories() {
     setError(null);
     let rows = await fetchAll();
     if (rows && rows.length === 0) {
-      const { error: upErr } = await supabase
+      const { error: upErr } = await db
         .from("categories")
         .upsert(DEFAULTS, { onConflict: "user_id,type,name", ignoreDuplicates: true });
       if (upErr) setError(upErr.message);
@@ -61,7 +61,7 @@ export function useCategories() {
   const addCategory = useCallback(async (type: CategoryType, name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return { error: "Введите название категории" };
-    const { error: insErr } = await supabase
+    const { error: insErr } = await db
       .from("categories")
       .upsert({ type, name: trimmed }, { onConflict: "user_id,type,name", ignoreDuplicates: true });
     if (insErr) return { error: insErr.message };
@@ -71,7 +71,7 @@ export function useCategories() {
   }, [fetchAll]);
 
   const removeCategory = useCallback(async (id: string) => {
-    const { error: delErr } = await supabase.from("categories").delete().eq("id", id);
+    const { error: delErr } = await db.from("categories").delete().eq("id", id);
     if (delErr) return { error: delErr.message };
     setCategories((prev) => prev.filter((c) => c.id !== id));
     return { error: null };

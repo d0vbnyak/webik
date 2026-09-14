@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { db } from "../lib/db";
 import type { Settings } from "../lib/types";
 
 /**
@@ -14,7 +14,7 @@ export function useSettings() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: selErr } = await supabase
+    const { data, error: selErr } = await db
       .from("settings")
       .select("*")
       .limit(1)
@@ -30,7 +30,7 @@ export function useSettings() {
       return;
     }
     // Строки нет — создаём дефолтную (tax_rate = 6)
-    const { error: upErr } = await supabase
+    const { error: upErr } = await db
       .from("settings")
       .upsert({ tax_rate: 6, default_monthly_goal: null }, { onConflict: "user_id", ignoreDuplicates: true });
     if (upErr) {
@@ -38,7 +38,7 @@ export function useSettings() {
       setLoading(false);
       return;
     }
-    const { data: created, error: reErr } = await supabase
+    const { data: created, error: reErr } = await db
       .from("settings")
       .select("*")
       .limit(1)
@@ -55,7 +55,7 @@ export function useSettings() {
   const update = useCallback(
     async (patch: Partial<Pick<Settings, "tax_rate" | "default_monthly_goal">>) => {
       if (!settings) return { error: "Настройки ещё не загружены" };
-      const { data, error: updErr } = await supabase
+      const { data, error: updErr } = await db
         .from("settings")
         .update(patch)
         .eq("id", settings.id)

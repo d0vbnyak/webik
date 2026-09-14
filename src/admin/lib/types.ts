@@ -1,4 +1,4 @@
-// Доменные типы админ-панели. Соответствуют таблицам Supabase (см. supabase/schema.sql).
+// Доменные типы админ-панели. Соответствуют таблицам базы (см. server/db/migrations).
 
 export type PaymentStatus = "paid" | "unpaid" | "partial";
 export type CategoryType = "expense" | "income";

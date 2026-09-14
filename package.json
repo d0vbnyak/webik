@@ -8,13 +8,18 @@
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.server.json && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "server": "tsx server/main.ts",
+    "admin:create": "tsx server/cli/create-admin.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
-    "@supabase/supabase-js": "^2.108.2",
+    "@electric-sql/pglite": "^0.5.8",
+    "@hono/node-server": "^2.1.1",
     "@tailwindcss/vite": "^4.1.0",
+    "hono": "^4.13.7",
     "motion": "^12.0.0",
+    "postgres": "^3.4.9",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router": "^7.17.0",
@@ -27,6 +32,7 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
     "ffmpeg-static": "^5.3.0",
+    "tsx": "^4.23.13",
     "typescript": "~5.9.0",
     "vite": "^7.0.0",
     "vitest": "^4.1.9"

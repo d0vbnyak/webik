@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { supabase } from "../lib/supabase";
+import { db } from "../lib/db";
 import { todayISO } from "../lib/dates";
 import { computeDueCharges } from "../lib/recurring";
 import { emitChange } from "../lib/dataBus";
@@ -28,7 +28,7 @@ export default function RecurringBootstrap() {
 
     void (async () => {
       const today = todayISO();
-      const { data: templates, error } = await supabase
+      const { data: templates, error } = await db
         .from("recurring_expenses")
         .select("*")
         .eq("active", true);
@@ -39,7 +39,7 @@ export default function RecurringBootstrap() {
 
       let inserted = false;
       for (const tpl of (templates ?? []) as RecurringExpense[]) {
-        const { data: existing, error: exErr } = await supabase
+        const { data: existing, error: exErr } = await db
           .from("expenses")
           .select("date")
           .eq("recurring_id", tpl.id);
@@ -58,7 +58,7 @@ export default function RecurringBootstrap() {
             comment: tpl.name,
             recurring_id: tpl.id,
           }));
-          const { error: insErr } = await supabase.from("expenses").insert(rows);
+          const { error: insErr } = await db.from("expenses").insert(rows);
           if (insErr) {
             console.error("[recurring] ошибка добавления авто-расходов:", insErr.message);
             continue;
@@ -66,7 +66,7 @@ export default function RecurringBootstrap() {
           inserted = true;
         }
         if (nextChargeDate !== tpl.next_charge_date) {
-          const { error: updErr } = await supabase
+          const { error: updErr } = await db
             .from("recurring_expenses")
             .update({ next_charge_date: nextChargeDate })
             .eq("id", tpl.id);
