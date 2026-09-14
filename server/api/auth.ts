@@ -44,7 +44,9 @@ export async function verifyPassword(password: string, stored: string): Promise<
   if (parts[0] !== "scrypt" || parts.length !== 6) return false;
   const [N, r, p] = parts.slice(1, 4).map(Number);
   // Потолок: хеш из базы не должен заставить процесс выделить гигабайты
-  if (![N, r, p].every(Number.isInteger) || N < 2 || N > 1 << 17 || r > 8 || p > 2) return false;
+  // 2^16 × r=8 = 64 МБ на проверку; две параллельные влезают в контейнер на 256 МБ.
+  // Поднимая N выше — поднять и mem_limit в deploy/docker-compose.yml
+  if (![N, r, p].every(Number.isInteger) || N < 2 || N > 1 << 16 || r > 8 || p > 2) return false;
   const expected = Buffer.from(parts[5], "base64");
   const key = await scryptAsync(password, Buffer.from(parts[4], "base64"), expected.length, {
     N,
@@ -107,6 +109,9 @@ let dummyHash: Promise<string> | null = null;
 
 export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
+/** Токены — 32 случайных байта в base64url (43 символа). Всё прочее отсеивается без запроса к базе. */
+export const isTokenFormat = (t: string | undefined): t is string => !!t && /^[A-Za-z0-9_-]{43}$/.test(t);
+
 export type SessionUser = { id: string; email: string };
 
 export type LoginResult =
@@ -124,7 +129,13 @@ export const TOTP_LOCK_MINUTES = 15;
  * подобрать отдельно от кода. Неудачи кода считаются в базе: 5 подряд — код
  * не принимается 15 минут, даже верный.
  */
-export async function checkCredentials(db: Db, email: string, password: string, totp: string | undefined): Promise<LoginResult> {
+export async function checkCredentials(
+  db: Db,
+  email: string,
+  password: string,
+  totp: string | undefined,
+  opts: { trustedDevice?: boolean } = {},
+): Promise<LoginResult> {
   const [user] = await db.query<{
     id: string;
     email: string;
@@ -143,7 +154,9 @@ export async function checkCredentials(db: Db, email: string, password: string, 
   if (!user || !ok) return { ok: false, reason: "bad_password" };
 
   if (user.totp_secret) {
-    if (user.totp_locked) return { ok: false, reason: "totp_locked" };
+    // Доверенного браузера блокировка кода не касается: иначе тот, кто узнал пароль,
+    // мог бы бесконечно запирать админа неверными кодами
+    if (user.totp_locked && !opts.trustedDevice) return { ok: false, reason: "totp_locked" };
     const step = totp ? verifyTotp(user.totp_secret, totp.trim(), user.totp_last_step) : null;
     // Условие в where — защита от гонки: один код не пройдёт в двух параллельных запросах
     const accepted =
@@ -186,7 +199,7 @@ export async function createSession(db: Db, userId: string): Promise<string> {
 }
 
 export async function sessionUser(db: Db, token: string | undefined): Promise<SessionUser | null> {
-  if (!token || token.length > 100) return null;
+  if (!isTokenFormat(token)) return null;
   // Проверка и продление простоя — одним запросом
   const [row] = await db.query<SessionUser>(
     `update sessions s set last_seen_at = now()
@@ -200,7 +213,7 @@ export async function sessionUser(db: Db, token: string | undefined): Promise<Se
 }
 
 export async function deleteSession(db: Db, token: string | undefined): Promise<void> {
-  if (token && token.length <= 100) await db.query("delete from sessions where id = $1", [sha256(token)]);
+  if (isTokenFormat(token)) await db.query("delete from sessions where id = $1", [sha256(token)]);
 }
 
 export async function createTrustedDevice(db: Db, userId: string): Promise<string> {
@@ -212,7 +225,7 @@ export async function createTrustedDevice(db: Db, userId: string): Promise<strin
 
 /** Доверенное ли это устройство для пользователя с этим email. Только чтение. */
 export async function isTrustedDevice(db: Db, token: string | undefined, email: string): Promise<boolean> {
-  if (!token || token.length > 100) return false;
+  if (!isTokenFormat(token)) return false;
   const rows = await db.query(
     `select 1 from trusted_devices d join users u on u.id = d.user_id
      where d.id = $1 and u.email = $2 and d.last_used_at > now() - interval '${DEVICE_DAYS} days'`,
@@ -222,7 +235,7 @@ export async function isTrustedDevice(db: Db, token: string | undefined, email: 
 }
 
 export async function touchTrustedDevice(db: Db, token: string | undefined): Promise<void> {
-  if (token && token.length <= 100) {
+  if (isTokenFormat(token)) {
     await db.query("update trusted_devices set last_used_at = now() where id = $1", [sha256(token)]);
   }
 }
@@ -308,6 +321,19 @@ export class LoginLimiter {
     if (list.length) this.hits.set(key, list);
     else this.hits.delete(key);
     return list;
+  }
+
+  /** Только проверка, без записи: заблокирован ли ключ. Секунд до разблокировки или 0. */
+  blockedFor(limits: { key: string; max: number }[]): number {
+    let wait = 0;
+    for (const { key, max } of limits) {
+      const list = this.hits.get(key);
+      if (!list) continue;
+      const since = this.now() - this.windowMs;
+      const recent = list.filter((t) => t > since);
+      if (recent.length >= max) wait = Math.max(wait, Math.ceil((recent[0] + this.windowMs - this.now()) / 1000));
+    }
+    return wait;
   }
 
   /** Резерв попытки: { release } — можно проверять, { retryAfter } — отказ. */

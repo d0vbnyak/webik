@@ -5,7 +5,10 @@
 # открытый порт был бы виден из интернета. HTTPS и 80/443 держит Caddy второго
 # бизнеса. К webik-app он ходит по отдельной сети webik_edge, где кроме них
 # никого нет: сервисы второго бизнеса не видят ни API, ни трафик от Caddy к нему.
-# Caddy подключается к webik_edge при деплое (см. deploy/README.md).
+# Сеть webik_edge создаётся один раз вне обоих compose-проектов
+# (docker network create --internal webik_edge): так ни `down` у WebIK, ни порядок
+# запуска не уронят Caddy второго бизнеса. --internal — у приложения нет выхода
+# в интернет, ему он не нужен.
 #
 # Запуск на сервере (из /opt/webik):  docker compose up -d --build
 # Секреты — в /opt/webik/.env (права 600), см. deploy/README.md.
@@ -79,3 +82,4 @@ networks:
     internal: true
   edge:
     name: webik_edge
+    external: true

@@ -61,6 +61,8 @@ if [ ! -f .env ]; then
 fi
 chmod 600 .env
 
+# Общая с Caddy сеть живёт вне compose-проектов (см. deploy/README.md)
+docker network inspect webik_edge >/dev/null 2>&1 || docker network create --internal webik_edge
 docker compose up -d --build --remove-orphans
 docker image prune -f --filter "label=com.docker.compose.project=webik" >/dev/null || true
 

@@ -38,6 +38,7 @@ import {
   createTrustedDevice,
   deleteSession,
   deviceCookieName,
+  isTokenFormat,
   isTrustedDevice,
   limiterIpKey,
   logLoginEvent,
@@ -109,16 +110,18 @@ export function createApp(opts: AppOptions) {
    * именем (старая с другим Path) — проверяем каждую, а не только первую.
    * В проде имя с префиксом __Host-, такую cookie не подсунуть с поддомена.
    */
-  const currentUser = async (c: Context): Promise<SessionUser | null> => {
-    const raw = c.req.header("cookie") ?? "";
-    const tokens = raw
+  const sessionTokens = (c: Context): string[] =>
+    (c.req.header("cookie") ?? "")
       .split(";")
       .map((part) => part.trim())
       .filter((part) => part.startsWith(`${SESSION}=`))
-      // Токен — base64url, декодировать не нужно; мусор отсеет длина и поиск по хешу
       .map((part) => part.slice(SESSION.length + 1))
+      // Не похожие на токен отсеиваются без запроса к базе
+      .filter(isTokenFormat)
       .slice(0, 3);
-    for (const token of tokens) {
+
+  const currentUser = async (c: Context): Promise<SessionUser | null> => {
+    for (const token of sessionTokens(c)) {
       const user = await sessionUser(db, token);
       if (user) return user;
     }
@@ -145,6 +148,15 @@ export function createApp(opts: AppOptions) {
     }
 
     const ip = opts.clientIp(c);
+    const ipLimit = { key: `ip:${limiterIpKey(ip)}`, max: IP_MAX_FAILS };
+    // Заблокированный адрес отсекаем сразу — без очереди и без запросов к базе
+    const ipBlocked = limiter.blockedFor([ipLimit]);
+    if (ipBlocked > 0) {
+      stats.add("rate_limited");
+      c.header("Retry-After", String(ipBlocked));
+      return c.json({ error: `Слишком много попыток. Попробуйте через ${Math.ceil(ipBlocked / 60)} мин.` }, 429);
+    }
+
     const deviceToken = getCookie(c, DEVICE);
     const trusted = await isTrustedDevice(db, deviceToken, email);
 
@@ -157,7 +169,7 @@ export function createApp(opts: AppOptions) {
     }
 
     try {
-      const limits = [{ key: `ip:${limiterIpKey(ip)}`, max: IP_MAX_FAILS }];
+      const limits = [ipLimit];
       // Счётчик по email — только для настоящих пользователей: мусорные адреса не создают ключей
       if (!trusted && (await userExists(db, email))) {
         limits.push({ key: `email:${normalizeEmail(email)}`, max: EMAIL_MAX_FAILS });
@@ -169,7 +181,7 @@ export function createApp(opts: AppOptions) {
         return c.json({ error: `Слишком много попыток. Попробуйте через ${Math.ceil(reserved.retryAfter / 60)} мин.` }, 429);
       }
 
-      const result = await checkCredentials(db, email, password, totp);
+      const result = await checkCredentials(db, email, password, totp, { trustedDevice: trusted });
       if (!result.ok) {
         await logLoginEvent(db, ip, email, result.reason);
         return c.json({ error: LOGIN_FAILED }, 401);
@@ -192,7 +204,7 @@ export function createApp(opts: AppOptions) {
   });
 
   app.post("/auth/logout", async (c) => {
-    await deleteSession(db, getCookie(c, SESSION));
+    for (const token of sessionTokens(c)) await deleteSession(db, token);
     deleteCookie(c, SESSION, { path: "/", secure: opts.secureCookies });
     return c.json({ ok: true });
   });

@@ -1,8 +1,8 @@
 // Интеграционные тесты API на настоящем Postgres (PGlite в памяти).
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createPgliteDb, migrate, parseTimestamp, type Db } from "../db/db";
+import { createPgliteDb, hasTransactionControl, migrate, parseTimestamp, type Db } from "../db/db";
 import { createApp } from "./app";
-import { LoginLimiter, Semaphore, createUser, hashPassword, limiterIpKey, verifyPassword } from "./auth";
+import { LoginLimiter, Semaphore, createUser, hashPassword, isTokenFormat, limiterIpKey, verifyPassword } from "./auth";
 import { buildQuery, QueryError, validateRequest } from "./query";
 import { base32Decode, base32Encode, generateTotpSecret, totpCode, verifyTotp } from "./totp";
 
@@ -108,6 +108,34 @@ describe("вход", () => {
     }
     expect(limiter.size).toBe(0);
     expect((await post("/auth/login", { email: "sergey@example.com", password: PASS })).status).toBe(200);
+  });
+
+  it("R1: заблокированный адрес не занимает очередь проверок пароля", async () => {
+    const checks = new Semaphore(1, 0);
+    const busyApp = createApp({ db, secureCookies: false, clientIp: () => ip, limiter, passwordChecks: checks, passwordWaitMs: 0 });
+    const send = (email: string, password: string) =>
+      busyApp.request("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-webik": "1" },
+        body: JSON.stringify({ email, password }),
+      });
+    ip = "7.7.7.7";
+    for (let i = 0; i < 5; i++) await send("sergey@example.com", "nope nope nope");
+    const hold = checks.tryAcquire(); // если бы заблокированный адрес брал слот — его бы не было
+    expect(hold).not.toBeNull();
+    hold!();
+    const flood = await Promise.all(Array.from({ length: 50 }, () => send("sergey@example.com", "nope nope nope")));
+    expect(flood.every((r) => r.status === 429)).toBe(true);
+    ip = "8.8.8.8";
+    expect((await send("sergey@example.com", PASS)).status).toBe(200);
+  });
+
+  it("R1: мусорные cookie сессии отсекаются без запроса к базе", async () => {
+    expect(isTokenFormat("a".repeat(43))).toBe(true);
+    expect(isTokenFormat("a".repeat(42))).toBe(false);
+    expect(isTokenFormat('"quoted"')).toBe(false);
+    const res = await post("/db", { table: "leads", action: "select" }, "webik_session=x; webik_session=y");
+    expect(res.status).toBe(401);
   });
 
   it("N1: мусорные email не создают ключей в лимитере — только адрес", async () => {
@@ -261,6 +289,18 @@ describe("второй фактор (TOTP)", () => {
     expect(await json(res)).toEqual({ error: "Неверный email, пароль или код" });
     await db.query("update users set totp_locked_until = now() - interval '1 second' where email = 'totp3@example.com'");
     expect((await post("/auth/login", { email: "totp3@example.com", password: PASS, totp: code })).status).toBe(200);
+  });
+
+  it("R2: блокировка кода не запирает доверенный браузер", async () => {
+    const secret = generateTotpSecret();
+    await createUser(db, "totp5@example.com", PASS, { totpSecret: secret });
+    const ok = await post("/auth/login", { email: "totp5@example.com", password: PASS, totp: totpCode(secret, Math.floor(Date.now() / 30_000)) });
+    const device = cookiesOf(ok).split("; ").find((c) => c.startsWith("webik_device="))!;
+    await db.query("update users set totp_locked_until = now() + interval '15 minutes' where email = 'totp5@example.com'");
+    ip = "6.6.6.6";
+    const next = totpCode(secret, Math.floor(Date.now() / 30_000) + 1);
+    expect((await post("/auth/login", { email: "totp5@example.com", password: PASS, totp: next })).status).toBe(401); // новый браузер — нет
+    expect((await post("/auth/login", { email: "totp5@example.com", password: PASS, totp: next }, device)).status).toBe(200); // свой — да
   });
 
   it("N6: код, проверенный при включении, повторно не проходит", async () => {
@@ -472,6 +512,13 @@ describe("/api/db", () => {
 });
 
 describe("миграции", () => {
+  it("R5: команды управления транзакцией находятся в любом месте", () => {
+    for (const bad of ["commit work;", "select 1; commit;", "end transaction;", "begin isolation level serializable;", "rollback to savepoint x;", "-- x\nCOMMIT"]) {
+      expect(hasTransactionControl(bad), bad).toBe(true);
+    }
+    expect(hasTransactionControl("alter table x add column committed_at timestamptz; -- commit;")).toBe(false);
+  });
+
   it("упавшая миграция откатывается, база остаётся рабочей", async () => {
     const mem = await createPgliteDb();
     try {

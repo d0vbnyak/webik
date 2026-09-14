@@ -106,8 +106,15 @@ export async function pendingMigrations(db: Db): Promise<string[]> {
 const MIGRATIONS_DIR = new URL("./migrations/", import.meta.url);
 
 // Управление транзакцией внутри файла сломало бы откат: миграция и отметка о ней
-// должны быть одной транзакцией. Грубая проверка — по командам в начале строки.
-const TX_CONTROL = /^\s*(begin|commit|rollback|end|abort|start\s+transaction|savepoint|release)\s*;/im;
+// должны быть одной транзакцией. Проверяется каждый оператор (без комментариев).
+// Ограничение: тела функций на plpgsql ($$ … $$) дадут ложное срабатывание —
+// такие миграции придётся проверять вручную.
+const TX_KEYWORDS = /^(begin|commit|rollback|end|abort|start\s+transaction|savepoint|release)\b/i;
+
+export function hasTransactionControl(sql: string): boolean {
+  const withoutComments = sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  return withoutComments.split(";").some((stmt) => TX_KEYWORDS.test(stmt.trim()));
+}
 
 /** Применяет ещё не применённые файлы из server/db/migrations по порядку имён. */
 export async function migrate(db: Db): Promise<string[]> {
@@ -115,7 +122,7 @@ export async function migrate(db: Db): Promise<string[]> {
   for (const file of await pendingMigrations(db)) {
     if (!/^[\w.-]+\.sql$/.test(file)) throw new Error(`Недопустимое имя миграции: ${file}`);
     const text = await readFile(new URL(file, MIGRATIONS_DIR), "utf8");
-    if (TX_CONTROL.test(text)) throw new Error(`В миграции ${file} не должно быть команд управления транзакцией`);
+    if (hasTransactionControl(text)) throw new Error(`В миграции ${file} не должно быть команд управления транзакцией`);
     try {
       await db.execInTransaction(`${text}\ninsert into schema_migrations (name) values ('${file}');`);
     } catch (e) {
