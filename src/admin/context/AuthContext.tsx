@@ -12,7 +12,7 @@ interface AuthValue {
   session: { user: User } | null;
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string, totp?: string) => Promise<{ error: string | null; needTotp?: boolean }>;
+  signIn: (email: string, password: string, totp?: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -57,8 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: API_HEADERS,
         body: JSON.stringify({ email, password, totp }),
       });
-      const body = (await res.json().catch(() => ({}))) as { user?: User; error?: string; needTotp?: boolean };
-      if (!res.ok || !body.user) return { error: body.error ?? `Сервер ответил ${res.status}`, needTotp: body.needTotp };
+      const body = (await res.json().catch(() => ({}))) as { user?: User; error?: string };
+      if (!res.ok || !body.user) return { error: body.error ?? `Сервер ответил ${res.status}` };
       setUser(body.user);
       return { error: null };
     } catch {

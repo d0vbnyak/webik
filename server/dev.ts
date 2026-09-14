@@ -37,7 +37,19 @@ async function openDevDb(): Promise<Db> {
   }
 }
 
-export async function getDevHandler(opts: { autologin: boolean }): Promise<Handler> {
+// Обработчик живёт, пока Vite не перезагрузит модуль: лимитер входа и таймеры
+// не должны пересоздаваться на каждый запрос
+let handler: Promise<Handler> | null = null;
+
+export function getDevHandler(opts: { autologin: boolean }): Promise<Handler> {
+  handler ??= buildDevHandler(opts);
+  handler.catch(() => {
+    handler = null;
+  });
+  return handler;
+}
+
+async function buildDevHandler(opts: { autologin: boolean }): Promise<Handler> {
   if (!g.__webikDevDb) {
     g.__webikDevDb = openDevDb();
     // Упавшую инициализацию не запоминаем — следующий запрос попробует снова
@@ -46,6 +58,9 @@ export async function getDevHandler(opts: { autologin: boolean }): Promise<Handl
     });
   }
   const db = await g.__webikDevDb;
+  // База открыта раньше, чем появились новые миграции, — докатываем их
+  const applied = await migrate(db);
+  if (applied.length) console.log(`[api] миграции: ${applied.join(", ")}`);
 
   const root = new Hono<{ Bindings: HttpBindings }>();
   if (opts.autologin) {

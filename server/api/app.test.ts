@@ -16,7 +16,7 @@ const json = (r: Response): Promise<any> => r.json(); // eslint-disable-line @ty
 
 beforeAll(async () => {
   db = await createPgliteDb();
-  expect(await migrate(db)).toEqual(["001_init.sql", "002_auth_hardening.sql"]);
+  expect(await migrate(db)).toEqual(["001_init.sql", "002_auth_hardening.sql", "003_totp_lock.sql"]);
   expect(await migrate(db)).toEqual([]); // повторный прогон ничего не делает
   await createUser(db, "Sergey@Example.com", PASS);
   await createUser(db, "other@example.com", PASS);
@@ -73,7 +73,8 @@ describe("вход", () => {
     const a = await post("/auth/login", { email: "sergey@example.com", password: "wrong password!" });
     const b = await post("/auth/login", { email: "nobody@example.com", password: "wrong password!" });
     expect(a.status).toBe(401);
-    expect(await json(a)).toEqual(await json(b));
+    expect(await json(a)).toEqual({ error: "Неверный email, пароль или код" });
+    expect(await json(b)).toEqual({ error: "Неверный email, пароль или код" });
     const [last] = await db.query<{ outcome: string; ip: string }>("select outcome, ip from login_events order by id desc limit 1");
     expect(last).toEqual({ outcome: "bad_password", ip: "1.2.3.4" });
   });
@@ -95,17 +96,30 @@ describe("вход", () => {
     expect(statuses.filter((s) => s === 429).length).toBeGreaterThanOrEqual(15);
   });
 
-  it("M4: занятый семафор проверок пароля — 429 без проверки и без штрафа", async () => {
-    const busy = new Semaphore(0);
-    const busyApp = createApp({ db, secureCookies: false, clientIp: () => ip, limiter, passwordChecks: busy });
-    const res = await busyApp.request("/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-webik": "1" },
-      body: JSON.stringify({ email: "sergey@example.com", password: PASS }),
-    });
-    expect(res.status).toBe(429);
-    expect((await json(res)).error).toContain("занят");
+  it("M4/N1: «сервер занят» — 429 без проверки, без штрафа и без ключей в лимитере", async () => {
+    const busyApp = createApp({ db, secureCookies: false, clientIp: () => ip, limiter, passwordChecks: new Semaphore(0), passwordWaitMs: 0 });
+    for (let i = 0; i < 50; i++) {
+      const res = await busyApp.request("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-webik": "1" },
+        body: JSON.stringify({ email: `junk${i}@x.ru`, password: PASS }),
+      });
+      expect(res.status).toBe(429);
+    }
+    expect(limiter.size).toBe(0);
     expect((await post("/auth/login", { email: "sergey@example.com", password: PASS })).status).toBe(200);
+  });
+
+  it("N1: мусорные email не создают ключей в лимитере — только адрес", async () => {
+    for (let i = 0; i < 4; i++) await post("/auth/login", { email: `junk${i}@x.ru`, password: "nope nope nope" });
+    expect(limiter.size).toBe(1);
+  });
+
+  it("N2: отказы по лимиту не пишутся в журнал построчно", async () => {
+    const [{ n: before }] = await db.query<{ n: number }>("select count(*)::int as n from login_events");
+    for (let i = 0; i < 30; i++) await post("/auth/login", { email: "sergey@example.com", password: "nope nope nope" });
+    const [{ n: after }] = await db.query<{ n: number }>("select count(*)::int as n from login_events");
+    expect(after - before).toBe(5); // только настоящие проверки пароля
   });
 
   it("M3: перебор к email админа с чужих адресов не запирает его доверенный браузер", async () => {
@@ -160,6 +174,12 @@ describe("вход", () => {
     expect((await post("/db", { table: "leads", action: "select" }, cookie)).status).toBe(401);
   });
 
+  it("несколько cookie сессии (старая с другим Path) — работает действующая", async () => {
+    const cookie = sessionOnly(await signIn("sergey@example.com"));
+    const res = await post("/db", { table: "leads", action: "select" }, `webik_session=stale-token; ${cookie}`);
+    expect(res.status).toBe(200);
+  });
+
   it("POST без заголовка X-WebIK отклоняется (CSRF)", async () => {
     const res = await post("/auth/login", { email: "sergey@example.com", password: PASS }, undefined, false);
     expect(res.status).toBe(403);
@@ -197,19 +217,23 @@ describe("второй фактор (TOTP)", () => {
     expect(base32Decode(secret).toString()).toBe("12345678901234567890");
   });
 
-  it("вход требует код; неверный — 401; верный — вход; повтор того же кода — нет", async () => {
+  it("N5: без кода, с неверным кодом и с неверным паролем — один и тот же ответ", async () => {
     const secret = generateTotpSecret();
     await createUser(db, "totp@example.com", PASS, { totpSecret: secret });
+    const expected = { error: "Неверный email, пароль или код" };
 
     const noCode = await post("/auth/login", { email: "totp@example.com", password: PASS });
-    expect(noCode.status).toBe(401);
-    expect(await json(noCode)).toMatchObject({ needTotp: true });
+    const badCode = await post("/auth/login", { email: "totp@example.com", password: PASS, totp: "000000" });
+    const badPass = await post("/auth/login", { email: "totp@example.com", password: "wrong wrong wrong", totp: "000000" });
+    for (const r of [noCode, badCode, badPass]) {
+      expect(r.status).toBe(401);
+      expect(await json(r)).toEqual(expected);
+    }
 
-    expect((await post("/auth/login", { email: "totp@example.com", password: PASS, totp: "000000" })).status).toBe(401);
-
-    const step = Math.floor(Date.now() / 30_000);
-    const code = totpCode(secret, step);
+    const code = totpCode(secret, Math.floor(Date.now() / 30_000));
     expect((await post("/auth/login", { email: "totp@example.com", password: PASS, totp: code })).status).toBe(200);
+    // Повтор того же кода
+    ip = "2.2.2.2";
     expect((await post("/auth/login", { email: "totp@example.com", password: PASS, totp: code })).status).toBe(401);
   });
 
@@ -219,6 +243,31 @@ describe("второй фактор (TOTP)", () => {
     const code = totpCode(secret, Math.floor(Date.now() / 30_000));
     expect((await post("/auth/login", { email: "totp2@example.com", password: "wrong wrong wrong", totp: code })).status).toBe(401);
     expect((await post("/auth/login", { email: "totp2@example.com", password: PASS, totp: code })).status).toBe(200);
+  });
+
+  it("N1: 5 неверных кодов — блокировка в базе, даже верный код не проходит", async () => {
+    const secret = generateTotpSecret();
+    await createUser(db, "totp3@example.com", PASS, { totpSecret: secret });
+    for (let i = 0; i < 5; i++) {
+      ip = `3.3.3.${i}`; // с разных адресов, чтобы не упереться в лимит адреса
+      await post("/auth/login", { email: "totp3@example.com", password: PASS, totp: "111111" });
+    }
+    ip = "4.4.4.4";
+    limiter = new LoginLimiter(); // «перезапуск сервера» — счётчик кода в базе не сбрасывается
+    app = createApp({ db, secureCookies: false, clientIp: () => ip, limiter });
+    const code = totpCode(secret, Math.floor(Date.now() / 30_000));
+    const res = await post("/auth/login", { email: "totp3@example.com", password: PASS, totp: code });
+    expect(res.status).toBe(401);
+    expect(await json(res)).toEqual({ error: "Неверный email, пароль или код" });
+    await db.query("update users set totp_locked_until = now() - interval '1 second' where email = 'totp3@example.com'");
+    expect((await post("/auth/login", { email: "totp3@example.com", password: PASS, totp: code })).status).toBe(200);
+  });
+
+  it("N6: код, проверенный при включении, повторно не проходит", async () => {
+    const secret = generateTotpSecret();
+    const step = Math.floor(Date.now() / 30_000);
+    await createUser(db, "totp4@example.com", PASS, { totpSecret: secret, totpStep: step });
+    expect((await post("/auth/login", { email: "totp4@example.com", password: PASS, totp: totpCode(secret, step) })).status).toBe(401);
   });
 
   it("допуск ±1 шаг, дальше — нет", () => {
@@ -233,15 +282,15 @@ describe("второй фактор (TOTP)", () => {
 });
 
 describe("LoginLimiter", () => {
-  it("M2: старые ключи вычищаются при превышении потолка", () => {
+  it("N1: при переполнении действующие блокировки не вытесняются, новый ключ — отказ", () => {
     let now = 0;
     const l = new LoginLimiter(1000, 100, () => now);
-    for (let i = 0; i < 150; i++) l.reserve([{ key: `k${i}`, max: 5 }]);
-    expect(l.size).toBeLessThanOrEqual(100);
-    now = 5000;
-    l.reserve([{ key: "fresh", max: 5 }]);
-    for (let i = 0; i < 200; i++) l.reserve([{ key: `n${i}`, max: 5 }]);
-    expect(l.size).toBeLessThanOrEqual(100);
+    for (let i = 0; i < 5; i++) l.reserve([{ key: "ip:attacker", max: 5 }]);
+    for (let i = 0; i < 99; i++) l.reserve([{ key: `junk${i}`, max: 5 }]);
+    expect("retryAfter" in l.reserve([{ key: "new-key", max: 5 }])).toBe(true); // места нет — отказ
+    expect("retryAfter" in l.reserve([{ key: "ip:attacker", max: 5 }])).toBe(true); // блок на месте
+    now = 5000; // окно истекло — место освобождается
+    expect("release" in l.reserve([{ key: "new-key", max: 5 }])).toBe(true);
   });
 
   it("release снимает только свою попытку", () => {
@@ -426,9 +475,8 @@ describe("миграции", () => {
   it("упавшая миграция откатывается, база остаётся рабочей", async () => {
     const mem = await createPgliteDb();
     try {
-      await mem.exec("create table schema_migrations (name text primary key, applied_at timestamptz not null default now())");
-      await expect(mem.exec("begin; create table t1 (id int); select * from нет_такой; commit;")).rejects.toThrow();
-      await mem.exec("rollback");
+      await expect(mem.execInTransaction("create table t1 (id int); select * from нет_такой;")).rejects.toThrow();
+      expect(await mem.query("select to_regclass('t1') as t")).toEqual([{ t: null }]); // откатилось
       expect(await mem.query("select 1 as ok")).toEqual([{ ok: 1 }]);
     } finally {
       await mem.close();

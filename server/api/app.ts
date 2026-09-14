@@ -10,12 +10,16 @@
  * заголовок X-WebIK: 1 — чужой сайт не может выставить его без CORS-разрешения.
  * НЕ добавлять CORS-middleware: вместе с ним эта защита перестаёт работать.
  *
- * Лимиты входа (в памяти процесса):
+ * Лимиты входа:
  *   - 5 неудач за 15 минут с одного адреса (IPv6 — с одной /64);
- *   - 10 неудач за 15 минут на один email — кроме доверенного устройства
- *     (браузера, откуда уже входили): так посторонний не запрёт админа,
- *     перебирая пароли к его адресу;
- *   - не больше двух одновременных проверок пароля на весь сервер.
+ *   - 10 неудач за 15 минут на email существующего пользователя — кроме
+ *     доверенного устройства (браузера, откуда уже входили): так посторонний
+ *     не запрёт админа, перебирая пароли к его адресу;
+ *   - 5 неверных кодов подряд — код не принимается 15 минут (счётчик в базе);
+ *   - одна проверка пароля за раз, отдельная очередь для доверенного браузера,
+ *     ожидание не дольше 1,5 с.
+ * Любая неудача входа — один и тот же ответ: по нему нельзя понять, что именно
+ * не так (пароль, код или блокировка).
  */
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -25,6 +29,7 @@ import {
   DEVICE_DAYS,
   EMAIL_MAX,
   LoginLimiter,
+  LoginStats,
   PASSWORD_MAX,
   SESSION_DAYS,
   Semaphore,
@@ -37,8 +42,11 @@ import {
   limiterIpKey,
   logLoginEvent,
   normalizeEmail,
+  pruneLoginEvents,
   sessionCookieName,
   sessionUser,
+  touchTrustedDevice,
+  userExists,
   type SessionUser,
 } from "./auth";
 import { QueryError, buildQuery, referenceChecks, validateRequest } from "./query";
@@ -50,18 +58,33 @@ export type AppOptions = {
   /** Адрес клиента (см. server/http.ts). */
   clientIp: (c: Context) => string;
   limiter?: LoginLimiter;
+  /** Проверки пароля для остальных и для доверенного браузера — раздельно. */
   passwordChecks?: Semaphore;
+  trustedPasswordChecks?: Semaphore;
+  /** Ожидание свободной проверки, мс. */
+  passwordWaitMs?: number;
 };
 
 type Env = { Variables: { user: SessionUser } };
 
 const IP_MAX_FAILS = 5;
 const EMAIL_MAX_FAILS = 10;
+const LOGIN_FAILED = "Неверный email, пароль или код";
 
 export function createApp(opts: AppOptions) {
   const { db } = opts;
   const limiter = opts.limiter ?? new LoginLimiter();
-  const passwordChecks = opts.passwordChecks ?? new Semaphore(2);
+  const passwordChecks = opts.passwordChecks ?? new Semaphore(1);
+  const trustedPasswordChecks = opts.trustedPasswordChecks ?? new Semaphore(1);
+  const passwordWaitMs = opts.passwordWaitMs ?? 1500;
+  const stats = new LoginStats();
+
+  // Сводка отказов раз в минуту и чистка журнала раз в час — по таймеру, не на каждый запрос
+  setInterval(() => {
+    const line = stats.flush();
+    if (line) console.warn(`[auth] отказы входа за минуту: ${line}`);
+  }, 60_000).unref();
+  setInterval(() => void pruneLoginEvents(db).catch(() => {}), 60 * 60_000).unref();
   const SESSION = sessionCookieName(opts.secureCookies);
   const DEVICE = deviceCookieName(opts.secureCookies);
   const cookieBase = { httpOnly: true, secure: opts.secureCookies, sameSite: "Strict" as const, path: "/" };
@@ -81,6 +104,27 @@ export function createApp(opts: AppOptions) {
   app.use("/auth/*", bodyLimit({ maxSize: 8 * 1024, onError: tooLarge }));
   app.use("/db", bodyLimit({ maxSize: 2 * 1024 * 1024, onError: tooLarge }));
 
+  /**
+   * Пользователь по cookie сессии. Браузер может прислать несколько cookie с одним
+   * именем (старая с другим Path) — проверяем каждую, а не только первую.
+   * В проде имя с префиксом __Host-, такую cookie не подсунуть с поддомена.
+   */
+  const currentUser = async (c: Context): Promise<SessionUser | null> => {
+    const raw = c.req.header("cookie") ?? "";
+    const tokens = raw
+      .split(";")
+      .map((part) => part.trim())
+      .filter((part) => part.startsWith(`${SESSION}=`))
+      // Токен — base64url, декодировать не нужно; мусор отсеет длина и поиск по хешу
+      .map((part) => part.slice(SESSION.length + 1))
+      .slice(0, 3);
+    for (const token of tokens) {
+      const user = await sessionUser(db, token);
+      if (user) return user;
+    }
+    return null;
+  };
+
   const readJson = async (c: Context): Promise<Record<string, unknown> | null> => {
     try {
       const body = await c.req.json();
@@ -94,57 +138,57 @@ export function createApp(opts: AppOptions) {
     const body = await readJson(c);
     const email = typeof body?.email === "string" ? body.email : "";
     const password = typeof body?.password === "string" ? body.password : "";
-    const totp = typeof body?.totp === "string" ? body.totp : undefined;
+    const totp = typeof body?.totp === "string" && body.totp.trim() ? body.totp : undefined;
     if (!email || !password) return c.json({ error: "Введите email и пароль" }, 400);
     if (email.length > EMAIL_MAX || password.length > PASSWORD_MAX || (totp && totp.length > 10)) {
-      return c.json({ error: "Неверный email или пароль" }, 400);
+      return c.json({ error: LOGIN_FAILED }, 400);
     }
 
     const ip = opts.clientIp(c);
-    const limits = [{ key: `ip:${limiterIpKey(ip)}`, max: IP_MAX_FAILS }];
-    if (!(await isTrustedDevice(db, getCookie(c, DEVICE), email))) {
-      limits.push({ key: `email:${normalizeEmail(email)}`, max: EMAIL_MAX_FAILS });
-    }
+    const deviceToken = getCookie(c, DEVICE);
+    const trusted = await isTrustedDevice(db, deviceToken, email);
 
-    const reserved = limiter.reserve(limits);
-    if ("retryAfter" in reserved) {
-      await logLoginEvent(db, ip, email, "rate_limited");
-      c.header("Retry-After", String(reserved.retryAfter));
-      return c.json({ error: `Слишком много попыток. Попробуйте через ${Math.ceil(reserved.retryAfter / 60)} мин.` }, 429);
-    }
-
-    const release = passwordChecks.tryAcquire();
+    // Сначала место в очереди, потом лимитер: отказ «занято» не оставляет следов в лимитере
+    const release = await (trusted ? trustedPasswordChecks : passwordChecks).acquire(passwordWaitMs);
     if (!release) {
-      reserved.release(); // сервер занят — это не неудачная попытка
-      await logLoginEvent(db, ip, email, "busy");
+      stats.add("busy");
       c.header("Retry-After", "2");
       return c.json({ error: "Сервер занят, повторите через пару секунд" }, 429);
     }
-    let result;
+
     try {
-      result = await checkCredentials(db, email, password, totp);
+      const limits = [{ key: `ip:${limiterIpKey(ip)}`, max: IP_MAX_FAILS }];
+      // Счётчик по email — только для настоящих пользователей: мусорные адреса не создают ключей
+      if (!trusted && (await userExists(db, email))) {
+        limits.push({ key: `email:${normalizeEmail(email)}`, max: EMAIL_MAX_FAILS });
+      }
+      const reserved = limiter.reserve(limits);
+      if ("retryAfter" in reserved) {
+        stats.add("rate_limited");
+        c.header("Retry-After", String(reserved.retryAfter));
+        return c.json({ error: `Слишком много попыток. Попробуйте через ${Math.ceil(reserved.retryAfter / 60)} мин.` }, 429);
+      }
+
+      const result = await checkCredentials(db, email, password, totp);
+      if (!result.ok) {
+        await logLoginEvent(db, ip, email, result.reason);
+        return c.json({ error: LOGIN_FAILED }, 401);
+      }
+
+      reserved.release();
+      await logLoginEvent(db, ip, email, "ok");
+      // Старая сессия этого браузера больше не нужна
+      await deleteSession(db, getCookie(c, SESSION));
+      setCookie(c, SESSION, await createSession(db, result.user.id), { ...cookieBase, maxAge: SESSION_DAYS * 86400 });
+      if (trusted) {
+        await touchTrustedDevice(db, deviceToken);
+      } else {
+        setCookie(c, DEVICE, await createTrustedDevice(db, result.user.id), { ...cookieBase, maxAge: DEVICE_DAYS * 86400 });
+      }
+      return c.json({ user: { id: result.user.id, email: result.user.email } });
     } finally {
       release();
     }
-
-    if (!result.ok) {
-      // Запрос кода — не ошибка пароля: попытку не считаем
-      if (result.reason === "need_totp") reserved.release();
-      await logLoginEvent(db, ip, email, result.reason);
-      if (result.reason === "need_totp") return c.json({ error: "Введите код из приложения", needTotp: true }, 401);
-      if (result.reason === "bad_totp") return c.json({ error: "Неверный код", needTotp: true }, 401);
-      return c.json({ error: "Неверный email или пароль" }, 401);
-    }
-
-    reserved.release();
-    await logLoginEvent(db, ip, email, "ok");
-    // Старая сессия этого браузера больше не нужна
-    await deleteSession(db, getCookie(c, SESSION));
-    setCookie(c, SESSION, await createSession(db, result.user.id), { ...cookieBase, maxAge: SESSION_DAYS * 86400 });
-    if (!(await isTrustedDevice(db, getCookie(c, DEVICE), email))) {
-      setCookie(c, DEVICE, await createTrustedDevice(db, result.user.id), { ...cookieBase, maxAge: DEVICE_DAYS * 86400 });
-    }
-    return c.json({ user: { id: result.user.id, email: result.user.email } });
   });
 
   app.post("/auth/logout", async (c) => {
@@ -154,12 +198,12 @@ export function createApp(opts: AppOptions) {
   });
 
   app.get("/auth/session", async (c) => {
-    const user = await sessionUser(db, getCookie(c, SESSION));
+    const user = await currentUser(c);
     return c.json({ user });
   });
 
   app.use("/db", async (c, next) => {
-    const user = await sessionUser(db, getCookie(c, SESSION));
+    const user = await currentUser(c);
     if (!user) return c.json({ data: null, error: { message: "Сессия истекла — войдите снова" } }, 401);
     c.set("user", user);
     await next();

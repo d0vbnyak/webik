@@ -31,6 +31,8 @@ export function trustedProxyByHost(host: string | undefined): (ip: string) => bo
       const found = await lookup(host, { all: true });
       addresses = new Set(found.map((a) => normalize(a.address)));
     } catch (e) {
+      // Старый адрес не храним: после пересоздания прокси его мог получить другой контейнер
+      addresses = new Set();
       console.error(`[http] не удалось найти прокси «${host}»:`, (e as Error).message);
     }
   };

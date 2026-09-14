@@ -9,7 +9,7 @@
  */
 import { createInterface } from "node:readline";
 import { Writable } from "node:stream";
-import { createPgDb, createPgliteDb, migrate } from "../db/db";
+import { createPgDb, createPgliteDb, migrate, pendingMigrations } from "../db/db";
 import { PASSWORD_MIN, createUser, normalizeEmail } from "../api/auth";
 import { generateTotpSecret, otpauthUri, verifyTotp } from "../api/totp";
 
@@ -45,7 +45,10 @@ if (!usePglite && !process.env.DATABASE_URL) {
 
 const db = usePglite ? await createPgliteDb(".data/pglite") : await createPgDb(process.env.DATABASE_URL!);
 try {
-  await migrate(db);
+  // Миграции в проде применяет только сервер при старте — CLI лишь проверяет,
+  // чтобы два процесса не накатывали их одновременно
+  if (usePglite) await migrate(db);
+  else if ((await pendingMigrations(db)).length > 0) throw new Error("Схема базы не обновлена — сначала запустите сервер");
   const email = normalizeEmail(await ask("Email: "));
   const [existing] = await db.query<{ id: string; totp_secret: string | null }>(
     "select id, totp_secret from users where email = $1",
@@ -69,6 +72,7 @@ try {
   if (password !== again) throw new Error("Пароли не совпали");
 
   let totpSecret: string | null | undefined;
+  let totpStep: number | null = null;
   const totpQuestion = existing?.totp_secret
     ? "Код из приложения уже включён. Выпустить новый секрет (старый перестанет работать)? [д/н] "
     : "Включить вход по коду из приложения (Яндекс Ключ, Google Authenticator)? Рекомендуется. [д/н] ";
@@ -78,11 +82,13 @@ try {
     console.log(`  Ключ:  ${secret.match(/.{1,4}/g)!.join(" ")}`);
     console.log(`  или ссылка otpauth (можно превратить в QR): ${otpauthUri(secret, email)}\n`);
     const code = await ask("Введите 6-значный код из приложения для проверки: ");
-    if (verifyTotp(secret, code.trim(), null) === null) throw new Error("Код не подошёл — ничего не сохранено, запустите заново");
+    totpStep = verifyTotp(secret, code.trim(), null);
+    if (totpStep === null) throw new Error("Код не подошёл — ничего не сохранено, запустите заново");
     totpSecret = secret;
   }
 
-  const user = await createUser(db, email, password, { totpSecret });
+  // Проверенный здесь код сразу помечается использованным — войти им повторно нельзя
+  const user = await createUser(db, email, password, { totpSecret, totpStep });
   console.log(
     `${user.created ? "Создан" : "Пароль изменён"}: ${user.email}.` +
       (totpSecret ? " Вход по коду включён." : "") +

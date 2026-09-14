@@ -13,8 +13,10 @@ export type Row = Record<string, unknown>;
 
 export interface Db {
   query<T extends Row = Row>(sql: string, params?: unknown[]): Promise<T[]>;
-  /** Несколько команд за раз, без параметров — для миграций. */
+  /** Несколько команд за раз, без параметров. */
   exec(sql: string): Promise<void>;
+  /** Команды одной транзакцией на выделенном соединении: ошибка — откат целиком. */
+  execInTransaction(sql: string): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -32,9 +34,8 @@ const identity = (x: string) => x;
 export async function createPgDb(url: string): Promise<Db> {
   const { default: postgres } = await import("postgres");
   const sql = postgres(url, {
-    // Одно соединение: админка на одного человека, а migrate выполняет
-    // begin…commit/rollback несколькими вызовами — они должны идти в одно соединение
-    max: 1,
+    // Небольшой пул: флуд попыток входа не должен ставить в очередь работу админа
+    max: 4,
     onnotice: () => {},
     types: {
       numeric: { to: OID.numeric, from: [OID.numeric], serialize: String, parse: Number },
@@ -53,6 +54,11 @@ export async function createPgDb(url: string): Promise<Db> {
       (await sql.unsafe(text, params as never[])) as unknown as T[],
     exec: async (text) => {
       await sql.unsafe(text);
+    },
+    execInTransaction: async (text) => {
+      await sql.begin(async (tx) => {
+        await tx.unsafe(text);
+      });
     },
     close: () => sql.end({ timeout: 5 }),
   };
@@ -78,30 +84,41 @@ export async function createPgliteDb(dataDir?: string): Promise<Db> {
     exec: async (text) => {
       await pg.exec(text);
     },
+    execInTransaction: async (text) => {
+      await pg.transaction(async (tx) => {
+        await tx.exec(text);
+      });
+    },
     close: () => pg.close(),
   };
 }
 
-/** Применяет ещё не применённые файлы из server/db/migrations по порядку имён. */
-export async function migrate(db: Db): Promise<string[]> {
+/** Файлы миграций, которых ещё нет в schema_migrations. */
+export async function pendingMigrations(db: Db): Promise<string[]> {
   await db.exec(
     "create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now())",
   );
-  const dir = new URL("./migrations/", import.meta.url);
-  const files = (await readdir(dir)).filter((f) => f.endsWith(".sql")).sort();
+  const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith(".sql")).sort();
   const done = new Set((await db.query<{ name: string }>("select name from schema_migrations")).map((r) => r.name));
+  return files.filter((f) => !done.has(f));
+}
+
+const MIGRATIONS_DIR = new URL("./migrations/", import.meta.url);
+
+// Управление транзакцией внутри файла сломало бы откат: миграция и отметка о ней
+// должны быть одной транзакцией. Грубая проверка — по командам в начале строки.
+const TX_CONTROL = /^\s*(begin|commit|rollback|end|abort|start\s+transaction|savepoint|release)\s*;/im;
+
+/** Применяет ещё не применённые файлы из server/db/migrations по порядку имён. */
+export async function migrate(db: Db): Promise<string[]> {
   const applied: string[] = [];
-  for (const file of files) {
-    if (done.has(file)) continue;
+  for (const file of await pendingMigrations(db)) {
     if (!/^[\w.-]+\.sql$/.test(file)) throw new Error(`Недопустимое имя миграции: ${file}`);
-    const text = await readFile(new URL(file, dir), "utf8");
-    // Транзакцией управляет migrate — внутри файла свои begin/commit сломали бы откат
-    if (/^\s*(begin|commit|rollback)\b/im.test(text)) throw new Error(`В миграции ${file} не должно быть begin/commit`);
-    // Миграция и отметка о ней — одной транзакцией: упавшая не останется наполовину
+    const text = await readFile(new URL(file, MIGRATIONS_DIR), "utf8");
+    if (TX_CONTROL.test(text)) throw new Error(`В миграции ${file} не должно быть команд управления транзакцией`);
     try {
-      await db.exec(`begin;\n${text}\ninsert into schema_migrations (name) values ('${file}');\ncommit;`);
+      await db.execInTransaction(`${text}\ninsert into schema_migrations (name) values ('${file}');`);
     } catch (e) {
-      await db.exec("rollback").catch(() => {});
       throw new Error(`Миграция ${file} не применилась: ${(e as Error).message}`);
     }
     applied.push(file);

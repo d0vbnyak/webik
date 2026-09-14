@@ -43,7 +43,8 @@ export async function verifyPassword(password: string, stored: string): Promise<
   const parts = stored.split("$");
   if (parts[0] !== "scrypt" || parts.length !== 6) return false;
   const [N, r, p] = parts.slice(1, 4).map(Number);
-  if (![N, r, p].every(Number.isInteger) || N > 1 << 20 || r > 16 || p > 4) return false;
+  // Потолок: хеш из базы не должен заставить процесс выделить гигабайты
+  if (![N, r, p].every(Number.isInteger) || N < 2 || N > 1 << 17 || r > 8 || p > 2) return false;
   const expected = Buffer.from(parts[5], "base64");
   const key = await scryptAsync(password, Buffer.from(parts[4], "base64"), expected.length, {
     N,
@@ -54,20 +55,50 @@ export async function verifyPassword(password: string, stored: string): Promise<
   return key.length === expected.length && timingSafeEqual(key, expected);
 }
 
-/** Семафор на проверки пароля. Занято — сразу отказ, без очереди. */
+/**
+ * Семафор на проверки пароля с короткой очередью: занято дольше waitMs — отказ.
+ * Очередь ограничена, чтобы висящие запросы не копились в памяти.
+ */
 export class Semaphore {
   private active = 0;
-  constructor(private max: number) {}
+  private queue: (() => void)[] = [];
+  constructor(
+    private max: number,
+    private maxQueue = 4,
+  ) {}
+
+  private makeRelease(): () => void {
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const next = this.queue.shift();
+      if (next) next();
+      else this.active--;
+    };
+  }
+
   tryAcquire(): (() => void) | null {
     if (this.active >= this.max) return null;
     this.active++;
-    let released = false;
-    return () => {
-      if (!released) {
-        released = true;
-        this.active--;
-      }
-    };
+    return this.makeRelease();
+  }
+
+  async acquire(waitMs: number): Promise<(() => void) | null> {
+    const now = this.tryAcquire();
+    if (now || waitMs <= 0 || this.queue.length >= this.maxQueue) return now;
+    return new Promise((resolve) => {
+      const grant = () => {
+        clearTimeout(timer);
+        resolve(this.makeRelease());
+      };
+      const timer = setTimeout(() => {
+        const idx = this.queue.indexOf(grant);
+        if (idx >= 0) this.queue.splice(idx, 1);
+        resolve(null);
+      }, waitMs);
+      this.queue.push(grant);
+    });
   }
 }
 
@@ -80,14 +111,31 @@ export type SessionUser = { id: string; email: string };
 
 export type LoginResult =
   | { ok: true; user: SessionUser & { totp: boolean } }
-  | { ok: false; reason: "bad_password" | "need_totp" | "bad_totp" };
+  | { ok: false; reason: "bad_password" | "bad_totp" | "totp_locked" };
 
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
-/** Проверка пароля и второго фактора. Сессию создаёт вызывающий. */
+export const TOTP_MAX_FAILURES = 5;
+export const TOTP_LOCK_MINUTES = 15;
+
+/**
+ * Проверка пароля и второго фактора. Сессию создаёт вызывающий.
+ * Наружу все неудачи отдаются одним ответом (см. app.ts) — иначе пароль можно
+ * подобрать отдельно от кода. Неудачи кода считаются в базе: 5 подряд — код
+ * не принимается 15 минут, даже верный.
+ */
 export async function checkCredentials(db: Db, email: string, password: string, totp: string | undefined): Promise<LoginResult> {
-  const [user] = await db.query<{ id: string; email: string; password_hash: string; totp_secret: string | null; totp_last_step: number | null }>(
-    "select id, email, password_hash, totp_secret, totp_last_step from users where email = $1",
+  const [user] = await db.query<{
+    id: string;
+    email: string;
+    password_hash: string;
+    totp_secret: string | null;
+    totp_last_step: number | null;
+    totp_locked: boolean;
+  }>(
+    `select id, email, password_hash, totp_secret, totp_last_step,
+            coalesce(totp_locked_until > now(), false) as totp_locked
+     from users where email = $1`,
     [normalizeEmail(email)],
   );
   dummyHash ??= hashPassword(randomBytes(12).toString("hex"));
@@ -95,15 +143,29 @@ export async function checkCredentials(db: Db, email: string, password: string, 
   if (!user || !ok) return { ok: false, reason: "bad_password" };
 
   if (user.totp_secret) {
-    if (!totp) return { ok: false, reason: "need_totp" };
-    const step = verifyTotp(user.totp_secret, totp.trim(), user.totp_last_step);
-    if (step === null) return { ok: false, reason: "bad_totp" };
+    if (user.totp_locked) return { ok: false, reason: "totp_locked" };
+    const step = totp ? verifyTotp(user.totp_secret, totp.trim(), user.totp_last_step) : null;
     // Условие в where — защита от гонки: один код не пройдёт в двух параллельных запросах
-    const updated = await db.query(
-      "update users set totp_last_step = $1 where id = $2 and (totp_last_step is null or totp_last_step < $1) returning id",
-      [step, user.id],
-    );
-    if (updated.length === 0) return { ok: false, reason: "bad_totp" };
+    const accepted =
+      step !== null &&
+      (
+        await db.query(
+          `update users set totp_last_step = $1, totp_failures = 0, totp_locked_until = null
+           where id = $2 and (totp_last_step is null or totp_last_step < $1) returning id`,
+          [step, user.id],
+        )
+      ).length > 0;
+    if (!accepted) {
+      // Пустой код тоже неудача: иначе «пароль верный, код не прислан» отличим по счётчику
+      await db.query(
+        `update users set
+           totp_locked_until = case when totp_failures + 1 >= $2 then now() + interval '${TOTP_LOCK_MINUTES} minutes' else totp_locked_until end,
+           totp_failures = case when totp_failures + 1 >= $2 then 0 else totp_failures + 1 end
+         where id = $1`,
+        [user.id, TOTP_MAX_FAILURES],
+      );
+      return { ok: false, reason: "bad_totp" };
+    }
   }
   return { ok: true, user: { id: user.id, email: user.email, totp: !!user.totp_secret } };
 }
@@ -148,32 +210,47 @@ export async function createTrustedDevice(db: Db, userId: string): Promise<strin
   return token;
 }
 
-/** Доверенное ли это устройство для пользователя с этим email. */
+/** Доверенное ли это устройство для пользователя с этим email. Только чтение. */
 export async function isTrustedDevice(db: Db, token: string | undefined, email: string): Promise<boolean> {
   if (!token || token.length > 100) return false;
   const rows = await db.query(
-    `update trusted_devices d set last_used_at = now()
-     from users u
-     where d.id = $1 and u.id = d.user_id and u.email = $2
-       and d.last_used_at > now() - interval '${DEVICE_DAYS} days'
-     returning d.id`,
-    [sha256(token), normalizeEmail(email)],
+    `select 1 from trusted_devices d join users u on u.id = d.user_id
+     where d.id = $1 and u.email = $2 and d.last_used_at > now() - interval '${DEVICE_DAYS} days'`,
+    [sha256(token), normalizeEmail(email).slice(0, EMAIL_MAX)],
   );
   return rows.length > 0;
 }
 
+export async function touchTrustedDevice(db: Db, token: string | undefined): Promise<void> {
+  if (token && token.length <= 100) {
+    await db.query("update trusted_devices set last_used_at = now() where id = $1", [sha256(token)]);
+  }
+}
+
+/** Существует ли пользователь — счётчик по email ведётся только для настоящих адресов. */
+export async function userExists(db: Db, email: string): Promise<boolean> {
+  const rows = await db.query("select 1 from users where email = $1", [normalizeEmail(email).slice(0, EMAIL_MAX)]);
+  return rows.length > 0;
+}
+
+/**
+ * Запись в журнал входов. Пишутся только исходы настоящих проверок — их не больше
+ * лимита на адрес. Отказы по лимиту и «сервер занят» считаются в памяти
+ * (LoginStats), иначе заблокированный адрес мог бы бесконечно писать в базу.
+ */
 export async function logLoginEvent(db: Db, ip: string, email: string, outcome: string): Promise<void> {
+  const normalized = normalizeEmail(email);
+  // Если в поле email по ошибке ввели пароль — в журнал он не попадёт
+  const safeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) ? normalized.slice(0, EMAIL_MAX) : "(не email)";
   try {
-    await db.query("insert into login_events (ip, email, outcome) values ($1, $2, $3)", [
-      ip.slice(0, 64),
-      normalizeEmail(email).slice(0, EMAIL_MAX),
-      outcome,
-    ]);
-    // Журнал за 90 дней достаточно
-    await db.query("delete from login_events where at < now() - interval '90 days'");
+    await db.query("insert into login_events (ip, email, outcome) values ($1, $2, $3)", [ip.slice(0, 64), safeEmail, outcome]);
   } catch (e) {
     console.error("[auth] журнал входов:", (e as Error).message);
   }
+}
+
+export async function pruneLoginEvents(db: Db): Promise<void> {
+  await db.query("delete from login_events where at < now() - interval '90 days'");
 }
 
 /**
@@ -185,7 +262,7 @@ export async function createUser(
   db: Db,
   email: string,
   password: string,
-  opts: { totpSecret?: string | null } = {},
+  opts: { totpSecret?: string | null; totpStep?: number | null } = {},
 ): Promise<SessionUser & { created: boolean }> {
   const normalized = normalizeEmail(email);
   if (normalized.length > EMAIL_MAX || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) throw new Error("Некорректный email");
@@ -193,13 +270,15 @@ export async function createUser(
   if (password.length > PASSWORD_MAX) throw new Error("Слишком длинный пароль");
   const hash = await hashPassword(password);
   const totp = opts.totpSecret === undefined ? null : opts.totpSecret;
+  // Шаг кода, проверенного при включении, сразу считается использованным
   const [row] = await db.query<SessionUser & { created: boolean }>(
-    `insert into users (email, password_hash, totp_secret) values ($1, $2, $3)
+    `insert into users (email, password_hash, totp_secret, totp_last_step) values ($1, $2, $3, $5)
      on conflict (email) do update set password_hash = excluded.password_hash,
        totp_secret = case when $4 then excluded.totp_secret else users.totp_secret end,
-       totp_last_step = case when $4 then null else users.totp_last_step end
+       totp_last_step = case when $4 then excluded.totp_last_step else users.totp_last_step end,
+       totp_failures = 0, totp_locked_until = null
      returning id, email, (xmax = 0) as created`,
-    [normalized, hash, totp, opts.totpSecret !== undefined],
+    [normalized, hash, totp, opts.totpSecret !== undefined, opts.totpStep ?? null],
   );
   await db.query("delete from sessions where user_id = $1", [row.id]);
   await db.query("delete from trusted_devices where user_id = $1", [row.id]);
@@ -210,12 +289,16 @@ export async function createUser(
  * Лимит неудачных попыток входа в памяти процесса.
  * Попытка записывается ДО проверки пароля и снимается при успехе — иначе залп
  * параллельных запросов проходит проверку лимита целиком.
+ *
+ * Потолок ключей закрыт наглухо: при переполнении удаляются только истёкшие
+ * ключи, а если места всё равно нет — новый ключ получает отказ. Действующие
+ * блокировки не вытесняются никогда, иначе флуд уникальными ключами их сбрасывал бы.
  */
 export class LoginLimiter {
   private hits = new Map<string, number[]>();
   constructor(
     private windowMs = 15 * 60 * 1000,
-    private maxKeys = 10_000,
+    private maxKeys = 50_000,
     private now = () => Date.now(),
   ) {}
 
@@ -227,7 +310,7 @@ export class LoginLimiter {
     return list;
   }
 
-  /** Резерв попытки: null — можно проверять, число — секунд до следующей попытки. */
+  /** Резерв попытки: { release } — можно проверять, { retryAfter } — отказ. */
   reserve(limits: { key: string; max: number }[]): { retryAfter: number } | { release: () => void } {
     let wait = 0;
     for (const { key, max } of limits) {
@@ -235,9 +318,15 @@ export class LoginLimiter {
       if (list.length >= max) wait = Math.max(wait, Math.ceil((list[0] + this.windowMs - this.now()) / 1000));
     }
     if (wait > 0) return { retryAfter: wait };
+
+    const newKeys = limits.filter(({ key }) => !this.hits.has(key)).length;
+    if (this.hits.size + newKeys > this.maxKeys) {
+      this.dropExpired();
+      if (this.hits.size + newKeys > this.maxKeys) return { retryAfter: 60 };
+    }
+
     const at = this.now();
     for (const { key } of limits) this.hits.set(key, [...this.recent(key), at]);
-    this.prune();
     return {
       // Успешный вход снимает свою попытку
       release: () => {
@@ -245,6 +334,7 @@ export class LoginLimiter {
           const list = this.hits.get(key);
           const i = list?.indexOf(at) ?? -1;
           if (list && i >= 0) list.splice(i, 1);
+          if (list && list.length === 0) this.hits.delete(key);
         }
       },
     };
@@ -255,17 +345,25 @@ export class LoginLimiter {
     return this.hits.size;
   }
 
-  private prune(): void {
-    if (this.hits.size <= this.maxKeys) return;
+  private dropExpired(): void {
     const since = this.now() - this.windowMs;
     for (const [key, list] of this.hits) {
       if (list[list.length - 1] <= since) this.hits.delete(key);
     }
-    // Всё ещё много — выкидываем самые старые ключи (Map хранит порядок вставки)
-    for (const key of this.hits.keys()) {
-      if (this.hits.size <= this.maxKeys) break;
-      this.hits.delete(key);
-    }
+  }
+}
+
+/** Отказы по лимиту и «занято» — счётчики в памяти, в лог раз в минуту одной строкой. */
+export class LoginStats {
+  private counts = new Map<string, number>();
+  add(outcome: string): void {
+    this.counts.set(outcome, (this.counts.get(outcome) ?? 0) + 1);
+  }
+  flush(): string | null {
+    if (this.counts.size === 0) return null;
+    const line = [...this.counts].map(([k, v]) => `${k}=${v}`).join(" ");
+    this.counts.clear();
+    return line;
   }
 }
 

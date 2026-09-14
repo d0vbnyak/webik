@@ -27,7 +27,14 @@ bash deploy/deploy.sh
    ```
    Включите вход по коду из приложения — скрипт спросит.
 3. Домен: A-запись домена WebIK → `72.56.237.147`.
-4. Caddy: вставить блок из `Caddyfile.snippet` (с доменом) в
+4. Сеть: подключить Caddy второго бизнеса к сети WebIK — без перезапуска:
+   ```bash
+   docker network connect webik_edge sakhuslugi-caddy-1
+   ```
+   и, чтобы подключение пережило пересоздание контейнера, в
+   `/opt/sakhuslugi/site/docker-compose.production.yml` у сервиса `caddy`
+   добавить сеть `webik_edge` (внешнюю). Правку показать владельцу до применения.
+5. Caddy: вставить блок из `Caddyfile.snippet` (с доменом) в
    `/opt/sakhuslugi/site/deploy/Caddyfile` и перезагрузить Caddy:
    ```bash
    docker exec sakhuslugi-caddy-1 caddy reload --config /etc/caddy/Caddyfile
@@ -42,9 +49,12 @@ bash deploy/deploy.sh
   из интернета мимо файрвола.
 - **Чат на сайте в проде выключен.** Anthropic API не обслуживает Россию; вернётся
   с российской моделью.
-- **Бэкап базы** (пока вручную):
+- **Бэкап базы** (пока вручную). В дампе персональные данные — только в
+  зашифрованном виде, пароль архива — в менеджере паролей:
   ```bash
-  ssh root@72.56.237.147 "docker exec webik-db-1 pg_dump -U webik_admin webik | gzip" > webik-$(date +%F).sql.gz
+  ssh root@72.56.237.147 "docker exec webik-db-1 pg_dump -U webik_admin webik | gzip" | 7z a -si -p webik-$(date +%F).sql.gz.7z
   ```
-  Хранить не на этом сервере.
+  Хранить не на этом сервере. Раз в месяц проверять, что дамп восстанавливается.
+- **Ещё не сделано** (по аудиту, низкий приоритет): образы закреплены тегами, а не
+  digest; TOTP-секрет в базе не зашифрован.
 - **Журнал входов** — таблица `login_events` (время, адрес, итог; без паролей).
