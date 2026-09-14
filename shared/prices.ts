@@ -60,6 +60,11 @@ export const PRICES: PriceList = {
     .filter((group) => group.items.length > 0),
 };
 
+/** Продаётся ли группа прайса — есть ли она среди видимых. */
+export function isGroupOffered(title: string): boolean {
+  return PRICES.groups.some((group) => group.title === title);
+}
+
 /** Названия позиций и групп, которых сейчас нет в продаже. */
 export function notOfferedNames(): string[] {
   return ALL_PRICES.groups.flatMap((group) =>

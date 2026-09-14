@@ -12,7 +12,7 @@ const SOLUTIONS: Choice[] = [
 const MODULES: Choice[] = [
   { id: "1c", label: "интеграция с 1с", price: 30000 },
   { id: "crm", label: "интеграция с crm", price: 25000 },
-  { id: "report", label: "дашборд с отчётами", price: 20000 },
+  { id: "training", label: "обучение сотрудников", price: 20000 },
   { id: "multi", label: "две языковые версии", price: 18000 },
 ];
 

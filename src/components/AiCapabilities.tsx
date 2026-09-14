@@ -229,7 +229,7 @@ const icons = {
 
 // hidden: услуга снята с продажи — не показывается, но данные сохранены
 type Service = { title: string; blurb: string; icon: ReactNode; hidden?: boolean };
-type Category = { title: string; services: Service[] };
+type Category = { title: string; services: Service[]; hidden?: boolean };
 
 const ALL_CATEGORIES: Category[] = [
   {
@@ -264,6 +264,7 @@ const ALL_CATEGORIES: Category[] = [
   },
   {
     title: "Графика и дизайн",
+    hidden: true,
     services: [
       { title: "Изображения для рекламы", blurb: "уникальные визуалы для соцсетей без фотографа и дизайнера", icon: icons.image },
       { title: "Логотип и брендинг", blurb: "базовый фирменный стиль быстро и без долгих согласований", icon: icons.spark, hidden: true },
@@ -273,12 +274,12 @@ const ALL_CATEGORIES: Category[] = [
   },
   {
     title: "Данные и аналитика",
+    hidden: true,
     services: [
       { title: "Парсинг и дашборды", blurb: "собираем данные и показываем нужное одним экраном", icon: icons.bars },
       { title: "Анализ отзывов", blurb: "тональность и тренды по бренду без ручного мониторинга", icon: icons.reviews },
       { title: "Разведка конкурентов", blurb: "цены, контент и позиционирование — в одном отчёте", icon: icons.scope },
       { title: "BI на языке вопросов", blurb: "задаёте вопрос текстом — получаете готовый отчёт", icon: icons.query },
-      { title: "OCR-оцифровка", blurb: "документы, чеки и анкеты — в структурированные данные", icon: icons.scan },
     ],
   },
   {
@@ -286,6 +287,8 @@ const ALL_CATEGORIES: Category[] = [
     services: [
       { title: "Скоринг лидов и CRM", blurb: "горячие контакты сами попадают к нужному менеджеру", icon: icons.funnel },
       { title: "Модерация комментариев", blurb: "автоответы и фильтрация негатива в соцсетях без модератора", icon: icons.shield },
+      // OCR раньше жил в «Данных и аналитике»; категория скрыта, а услуга — основа демо счетов
+      { title: "OCR-оцифровка", blurb: "документы, чеки и анкеты — в структурированные данные", icon: icons.scan },
       { title: "Анализ договоров", blurb: "риски и ключевые условия документа — за минуту", icon: icons.contract },
       { title: "Автогенерация КП", blurb: "коммерческое предложение под клиента без шаблонной работы", icon: icons.slides },
       { title: "Рекомендации в магазине", blurb: "система подбирает допродажи под каждого покупателя", icon: icons.cart },
@@ -318,7 +321,7 @@ function ServiceCard({ service, i }: { service: Service; i: number }) {
   );
 }
 
-const CATEGORIES: Category[] = ALL_CATEGORIES.map((cat) => ({
+const CATEGORIES: Category[] = ALL_CATEGORIES.filter(isVisible).map((cat) => ({
   ...cat,
   services: cat.services.filter(isVisible),
 })).filter((cat) => cat.services.length > 0);
