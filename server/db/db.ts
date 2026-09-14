@@ -32,7 +32,9 @@ const identity = (x: string) => x;
 export async function createPgDb(url: string): Promise<Db> {
   const { default: postgres } = await import("postgres");
   const sql = postgres(url, {
-    max: 5,
+    // Одно соединение: админка на одного человека, а migrate выполняет
+    // begin…commit/rollback несколькими вызовами — они должны идти в одно соединение
+    max: 1,
     onnotice: () => {},
     types: {
       numeric: { to: OID.numeric, from: [OID.numeric], serialize: String, parse: Number },
@@ -91,9 +93,17 @@ export async function migrate(db: Db): Promise<string[]> {
   const applied: string[] = [];
   for (const file of files) {
     if (done.has(file)) continue;
+    if (!/^[\w.-]+\.sql$/.test(file)) throw new Error(`Недопустимое имя миграции: ${file}`);
     const text = await readFile(new URL(file, dir), "utf8");
+    // Транзакцией управляет migrate — внутри файла свои begin/commit сломали бы откат
+    if (/^\s*(begin|commit|rollback)\b/im.test(text)) throw new Error(`В миграции ${file} не должно быть begin/commit`);
     // Миграция и отметка о ней — одной транзакцией: упавшая не останется наполовину
-    await db.exec(`begin;\n${text}\ninsert into schema_migrations (name) values ('${file.replace(/'/g, "''")}');\ncommit;`);
+    try {
+      await db.exec(`begin;\n${text}\ninsert into schema_migrations (name) values ('${file}');\ncommit;`);
+    } catch (e) {
+      await db.exec("rollback").catch(() => {});
+      throw new Error(`Миграция ${file} не применилась: ${(e as Error).message}`);
+    }
     applied.push(file);
   }
   return applied;

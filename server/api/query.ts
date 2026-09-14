@@ -29,6 +29,85 @@ export type DbRequest = {
 
 export class QueryError extends Error {}
 
+const LIMITS = { filters: 50, inValues: 1000, order: 5, limit: 10_000, rows: 1000, columns: 60 } as const;
+const ACTIONS = ["select", "insert", "update", "delete", "upsert"] as const;
+const OPS = ["eq", "in", "gte", "lt"] as const;
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype;
+
+/** Только скаляры: вложенные объекты в Postgres ведут себя по-разному в разных драйверах. */
+const isScalar = (v: unknown) =>
+  v === null || typeof v === "string" || typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v));
+
+/**
+ * Проверка формы запроса до сборки SQL: типы полей, перечни, размеры.
+ * Возвращает нормализованный запрос или бросает QueryError.
+ */
+export function validateRequest(raw: unknown): DbRequest {
+  const bad = (msg: string): never => {
+    throw new QueryError(msg);
+  };
+  if (!isPlainObject(raw)) bad("Некорректный запрос");
+  const r = raw as Record<string, unknown>;
+
+  if (typeof r.table !== "string") bad("table должен быть строкой");
+  if (!ACTIONS.includes(r.action as (typeof ACTIONS)[number])) bad("Неизвестное действие");
+  if (r.columns !== undefined && typeof r.columns !== "string") bad("columns должен быть строкой");
+  if (typeof r.columns === "string" && r.columns.length > 2000) bad("Слишком длинный columns");
+
+  const filters = r.filters ?? [];
+  if (!Array.isArray(filters) || filters.length > LIMITS.filters) bad("Некорректные filters");
+  for (const f of filters as unknown[]) {
+    if (!isPlainObject(f) || typeof f.column !== "string" || !OPS.includes(f.op as (typeof OPS)[number])) {
+      bad("Некорректный фильтр");
+    }
+    const flt = f as Record<string, unknown>;
+    if (!("value" in flt)) bad("У фильтра нет value");
+    if (flt.op === "in") {
+      if (!Array.isArray(flt.value) || flt.value.length > LIMITS.inValues || !flt.value.every(isScalar)) bad("Некорректный фильтр in");
+    } else if (!isScalar(flt.value)) {
+      bad("Значение фильтра должно быть скаляром");
+    }
+  }
+
+  const order = r.order ?? [];
+  if (!Array.isArray(order) || order.length > LIMITS.order) bad("Некорректный order");
+  for (const o of order as unknown[]) {
+    if (!isPlainObject(o) || typeof o.column !== "string" || typeof o.ascending !== "boolean" || typeof o.nullsFirst !== "boolean") {
+      bad("Некорректная сортировка");
+    }
+  }
+
+  if (r.limit !== undefined && (!Number.isInteger(r.limit) || (r.limit as number) < 0 || (r.limit as number) > LIMITS.limit)) {
+    bad("Некорректный limit");
+  }
+
+  if (r.values !== undefined) {
+    const rows = Array.isArray(r.values) ? r.values : [r.values];
+    if (rows.length === 0 || rows.length > LIMITS.rows) bad("Некорректное число строк");
+    for (const row of rows) {
+      if (!isPlainObject(row)) bad("Строка значений должна быть объектом");
+      const entries = Object.entries(row as Record<string, unknown>);
+      if (entries.length > LIMITS.columns || !entries.every(([, v]) => isScalar(v))) bad("Значения должны быть скалярами");
+    }
+  }
+  if (r.onConflict !== undefined && typeof r.onConflict !== "string") bad("onConflict должен быть строкой");
+  if (r.ignoreDuplicates !== undefined && typeof r.ignoreDuplicates !== "boolean") bad("ignoreDuplicates должен быть boolean");
+
+  return {
+    table: r.table as string,
+    action: r.action as DbRequest["action"],
+    columns: r.columns as string | undefined,
+    filters: filters as Filter[],
+    order: order as DbRequest["order"],
+    limit: r.limit as number | undefined,
+    values: r.values as DbRequest["values"],
+    onConflict: r.onConflict as string | undefined,
+    ignoreDuplicates: r.ignoreDuplicates as boolean | undefined,
+  };
+}
+
 export type BuiltQuery = { sql: string; params: unknown[] };
 
 function spec(table: string): TableSpec {

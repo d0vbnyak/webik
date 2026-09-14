@@ -8,6 +8,8 @@ export default function Login() {
   const { session, loading, signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [totp, setTotp] = useState("");
+  const [needTotp, setNeedTotp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -18,8 +20,9 @@ export default function Login() {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    const { error: err } = await signIn(email.trim(), password);
+    const { error: err, needTotp: askCode } = await signIn(email.trim(), password, needTotp ? totp : undefined);
     setSubmitting(false);
+    if (askCode) setNeedTotp(true);
     // Сервер сам формулирует понятную ошибку (неверный пароль, лимит попыток)
     if (err) setError(err);
     // при успехе AuthContext обновит пользователя → Navigate выше
@@ -59,6 +62,24 @@ export default function Login() {
             className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-brand-green"
           />
         </label>
+
+        {needTotp && (
+          <label className="mt-3 block text-sm text-zinc-300">
+            Код из приложения
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              value={totp}
+              onChange={(e) => setTotp(e.target.value.replace(/\D/g, ""))}
+              autoComplete="one-time-code"
+              autoFocus
+              required
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 tracking-[0.3em] text-zinc-100 outline-none focus:border-brand-green"
+            />
+          </label>
+        )}
 
         {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 

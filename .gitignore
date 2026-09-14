@@ -27,3 +27,6 @@ public/coffe-01/*.mp4
 
 # Локальная база разработки (PGlite)
 .data/
+
+# Сборка сервера (npm run build:server)
+build/

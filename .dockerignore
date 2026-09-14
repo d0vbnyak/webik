@@ -1,0 +1,7 @@
+# В образ идут только package*.json, dist/, build/ и миграции — остальное не нужно
+*
+!package.json
+!package-lock.json
+!dist
+!build
+!server/db/migrations

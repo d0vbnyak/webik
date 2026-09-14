@@ -1,0 +1,75 @@
+# WebIK на общем сервере. Отдельный compose-проект рядом со вторым бизнесом:
+# его контейнеры, базы и тома не трогаются.
+#
+# Наружу ничего не публикуется (ни одного ports:) — Docker обходит UFW, поэтому
+# открытый порт был бы виден из интернета. HTTPS и 80/443 держит Caddy второго
+# бизнеса, к webik-app он ходит по сети sakhuslugi_default (см. Caddyfile.snippet).
+#
+# Компромисс: в сети sakhuslugi_default API видят и остальные сервисы второго
+# бизнеса. Им доступно то же, что из интернета (вход по паролю и коду), но не
+# подмена адреса клиента: X-Forwarded-For принимается только от контейнера caddy.
+# База WebIK — только во внутренней сети, её не видит никто, кроме API.
+#
+# Запуск на сервере (из /opt/webik):  docker compose up -d --build
+# Секреты — в /opt/webik/.env (права 600), см. deploy/README.md.
+
+name: webik
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: webik
+      POSTGRES_USER: webik_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?задайте APP_DB_PASSWORD в .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    networks: [internal]
+    # Скромно: админка на одного человека, рядом чужой прод
+    command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=20"]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webik_admin -d webik"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: ./app
+    image: webik-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://webik_app:${APP_DB_PASSWORD}@db:5432/webik
+      PORT: "8080"
+      TRUSTED_PROXY_HOST: caddy
+    networks:
+      internal: {}
+      edge:
+        aliases: [webik-app]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+
+volumes:
+  db-data:
+
+networks:
+  internal:
+    internal: true
+  edge:
+    name: sakhuslugi_default
+    external: true

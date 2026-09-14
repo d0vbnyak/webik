@@ -10,11 +10,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "server": "tsx server/main.ts",
-    "admin:create": "tsx server/cli/create-admin.ts"
+    "admin:create": "tsx server/cli/create-admin.ts",
+    "build:server": "esbuild server/main.ts server/cli/create-admin.ts --bundle --platform=node --format=esm --target=node24 --packages=external --outdir=build --entry-names=[name] --out-extension:.js=.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
-    "@electric-sql/pglite": "^0.5.8",
     "@hono/node-server": "^2.1.1",
     "@tailwindcss/vite": "^4.1.0",
     "hono": "^4.13.7",
@@ -27,10 +27,12 @@
     "tailwindcss": "^4.1.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^22.20.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "esbuild": "^0.28.2",
     "ffmpeg-static": "^5.3.0",
     "tsx": "^4.23.13",
     "typescript": "~5.9.0",

@@ -8,6 +8,7 @@
  * DEV_AUTOLOGIN=1 в .env включает GET /api/dev/login — вход без пароля под
  * dev@webik.local. Нужен для проверки админки в браузере. Существует только
  * здесь: в прод-точку входа server/main.ts этот маршрут не попадает.
+ * Не запускайте Vite с --host, если в локальной базе реальные данные.
  */
 import { Hono } from "hono";
 import { setCookie } from "hono/cookie";
@@ -16,24 +17,34 @@ import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createPgliteDb, migrate, type Db } from "./db/db";
 import { createApp } from "./api/app";
-import { SESSION_COOKIE, SESSION_DAYS, createSession, createUser } from "./api/auth";
+import { SESSION_DAYS, createSession, createUser, sessionCookieName } from "./api/auth";
 import { clientIp } from "./http";
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
 const g = globalThis as typeof globalThis & { __webikDevDb?: Promise<Db> };
 
-export async function getDevHandler(opts: { autologin: boolean }): Promise<Handler> {
-  g.__webikDevDb ??= (async () => {
-    const db = await createPgliteDb(".data/pglite");
+async function openDevDb(): Promise<Db> {
+  const db = await createPgliteDb(".data/pglite");
+  try {
     const applied = await migrate(db);
     if (applied.length) console.log(`[api] миграции: ${applied.join(", ")}`);
     return db;
-  })();
-  // Упавшую инициализацию не запоминаем — следующий запрос попробует снова
-  g.__webikDevDb.catch(() => {
-    g.__webikDevDb = undefined;
-  });
+  } catch (e) {
+    // Закрываем, иначе следующая попытка откроет второй экземпляр на ту же папку
+    await db.close().catch(() => {});
+    throw e;
+  }
+}
+
+export async function getDevHandler(opts: { autologin: boolean }): Promise<Handler> {
+  if (!g.__webikDevDb) {
+    g.__webikDevDb = openDevDb();
+    // Упавшую инициализацию не запоминаем — следующий запрос попробует снова
+    g.__webikDevDb.catch(() => {
+      g.__webikDevDb = undefined;
+    });
+  }
   const db = await g.__webikDevDb;
 
   const root = new Hono<{ Bindings: HttpBindings }>();
@@ -41,15 +52,15 @@ export async function getDevHandler(opts: { autologin: boolean }): Promise<Handl
     root.get("/api/dev/login", async (c) => {
       const [existing] = await db.query<{ id: string }>("select id from users where email = 'dev@webik.local'");
       const userId = existing?.id ?? (await createUser(db, "dev@webik.local", randomBytes(24).toString("hex"))).id;
-      setCookie(c, SESSION_COOKIE, await createSession(db, userId), {
+      setCookie(c, sessionCookieName(false), await createSession(db, userId), {
         httpOnly: true,
         sameSite: "Strict",
-        path: "/api",
-        maxAge: SESSION_DAYS * 24 * 60 * 60,
+        path: "/",
+        maxAge: SESSION_DAYS * 86400,
       });
       return c.redirect("/admin");
     });
   }
-  root.route("/", createApp({ db, secureCookies: false, clientIp: (c) => clientIp(c, false) }));
+  root.route("/", createApp({ db, secureCookies: false, clientIp: (c) => clientIp(c, () => false) }));
   return getRequestListener(root.fetch) as Handler;
 }

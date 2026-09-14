@@ -1,0 +1,27 @@
+# Блок для Caddyfile второго бизнеса (/opt/sakhuslugi/site/deploy/Caddyfile).
+# ДОМЕН — заменить на домен WebIK, его A-запись должна смотреть на сервер.
+# После правки:  docker exec sakhuslugi-caddy-1 caddy reload --config /etc/caddy/Caddyfile
+# (reload без простоя; при ошибке в файле Caddy оставит старый конфиг).
+
+ДОМЕН {
+	tls {
+		key_type rsa2048
+	}
+
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	# Тело больше 2 МБ не пропускаем ещё до приложения
+	request_body {
+		max_size 2MB
+	}
+
+	reverse_proxy webik-app:8080 {
+		# Приложение берёт адрес клиента из последнего X-Forwarded-For
+		header_up X-Forwarded-For {remote_host}
+	}
+}

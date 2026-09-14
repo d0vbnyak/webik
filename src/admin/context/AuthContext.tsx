@@ -12,7 +12,7 @@ interface AuthValue {
   session: { user: User } | null;
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signIn: (email: string, password: string, totp?: string) => Promise<{ error: string | null; needTotp?: boolean }>;
   signOut: () => Promise<void>;
 }
 
@@ -49,16 +49,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string, totp?: string) => {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         credentials: "same-origin",
         headers: API_HEADERS,
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, totp }),
       });
-      const body = (await res.json().catch(() => ({}))) as { user?: User; error?: string };
-      if (!res.ok || !body.user) return { error: body.error ?? `Сервер ответил ${res.status}` };
+      const body = (await res.json().catch(() => ({}))) as { user?: User; error?: string; needTotp?: boolean };
+      if (!res.ok || !body.user) return { error: body.error ?? `Сервер ответил ${res.status}`, needTotp: body.needTotp };
       setUser(body.user);
       return { error: null };
     } catch {

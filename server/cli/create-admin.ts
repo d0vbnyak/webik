@@ -1,14 +1,17 @@
 /**
- * Создать админа или сменить ему пароль. Пароль вводится в терминале и нигде не
- * сохраняется в открытом виде; смена пароля выкидывает все старые сессии.
+ * Создать админа или сменить пароль существующему. Заодно — включить вход по
+ * коду из приложения (TOTP). Пароль вводится в терминале, в аргументы и
+ * переменные окружения его не передавать.
  *
  *   npm run admin:create                 — база из DATABASE_URL
  *   npm run admin:create -- --pglite     — локальная база разработки (.data/pglite)
+ *   В контейнере: docker compose exec -it app node build/create-admin.mjs
  */
 import { createInterface } from "node:readline";
 import { Writable } from "node:stream";
 import { createPgDb, createPgliteDb, migrate } from "../db/db";
-import { PASSWORD_MIN, createUser } from "../api/auth";
+import { PASSWORD_MIN, createUser, normalizeEmail } from "../api/auth";
+import { generateTotpSecret, otpauthUri, verifyTotp } from "../api/totp";
 
 // Вывод, который можно заглушить, — чтобы пароль не печатался при наборе
 let muted = false;
@@ -32,6 +35,8 @@ function ask(question: string, hidden = false): Promise<string> {
   });
 }
 
+const yes = (s: string) => /^(д|да|y|yes)$/i.test(s.trim());
+
 const usePglite = process.argv.includes("--pglite");
 if (!usePglite && !process.env.DATABASE_URL) {
   console.error("Не задан DATABASE_URL (или запустите с --pglite для локальной базы)");
@@ -41,12 +46,48 @@ if (!usePglite && !process.env.DATABASE_URL) {
 const db = usePglite ? await createPgliteDb(".data/pglite") : await createPgDb(process.env.DATABASE_URL!);
 try {
   await migrate(db);
-  const email = (await ask("Email: ")).trim();
+  const email = normalizeEmail(await ask("Email: "));
+  const [existing] = await db.query<{ id: string; totp_secret: string | null }>(
+    "select id, totp_secret from users where email = $1",
+    [email],
+  );
+  const others = await db.query<{ email: string }>("select email from users where email <> $1", [email]);
+
+  if (existing) {
+    if (!yes(await ask(`Пользователь ${email} уже есть. Сменить пароль? Все его сессии и устройства сбросятся. [д/н] `))) {
+      throw new Error("Отменено");
+    }
+  } else if (others.length > 0) {
+    const list = others.map((o) => o.email).join(", ");
+    if (!yes(await ask(`Такого email нет. Уже есть: ${list}. Создать ещё одного админа ${email}? [д/н] `))) {
+      throw new Error("Отменено — проверьте email на опечатку");
+    }
+  }
+
   const password = await ask(`Пароль (не короче ${PASSWORD_MIN} символов): `, true);
   const again = await ask("Ещё раз: ", true);
   if (password !== again) throw new Error("Пароли не совпали");
-  const user = await createUser(db, email, password);
-  console.log(`Готово: ${user.email}. Старые сессии этого пользователя сброшены.`);
+
+  let totpSecret: string | null | undefined;
+  const totpQuestion = existing?.totp_secret
+    ? "Код из приложения уже включён. Выпустить новый секрет (старый перестанет работать)? [д/н] "
+    : "Включить вход по коду из приложения (Яндекс Ключ, Google Authenticator)? Рекомендуется. [д/н] ";
+  if (yes(await ask(totpQuestion))) {
+    const secret = generateTotpSecret();
+    console.log("\nДобавьте в приложение аккаунт вручную:");
+    console.log(`  Ключ:  ${secret.match(/.{1,4}/g)!.join(" ")}`);
+    console.log(`  или ссылка otpauth (можно превратить в QR): ${otpauthUri(secret, email)}\n`);
+    const code = await ask("Введите 6-значный код из приложения для проверки: ");
+    if (verifyTotp(secret, code.trim(), null) === null) throw new Error("Код не подошёл — ничего не сохранено, запустите заново");
+    totpSecret = secret;
+  }
+
+  const user = await createUser(db, email, password, { totpSecret });
+  console.log(
+    `${user.created ? "Создан" : "Пароль изменён"}: ${user.email}.` +
+      (totpSecret ? " Вход по коду включён." : "") +
+      (user.created ? "" : " Старые сессии и доверенные устройства сброшены."),
+  );
 } catch (e) {
   console.error(`Ошибка: ${(e as Error).message}`);
   process.exitCode = 1;
