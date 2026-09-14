@@ -60,13 +60,13 @@ export default function ThemeSwitch() {
             dark ? "text-white/40" : "text-[#1a1a1a]/45"
           }`}
         >
-          дизайн-система
+          лендинг
           <br />с тёмной темой
         </div>
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2">
-        {["сайт", "бот", "seo"].map((t) => (
+        {["лендинг", "бот", "агент"].map((t) => (
           <div
             key={t}
             className={`rounded-lg px-2 py-2.5 text-center text-[11px] lowercase transition-colors duration-500 ${

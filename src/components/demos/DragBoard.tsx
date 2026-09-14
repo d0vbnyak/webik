@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 
 const STICKERS = [
-  { text: "сайт", color: "#9fff00", rotate: -4 },
+  { text: "лендинг", color: "#9fff00", rotate: -4 },
   { text: "бот", color: "#c7b9ff", rotate: 3 },
-  { text: "seo", color: "#ffd6a5", rotate: -2 },
+  { text: "агент", color: "#ffd6a5", rotate: -2 },
   { text: "ai", color: "#a5d8ff", rotate: 5 },
 ];
 

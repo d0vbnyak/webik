@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "motion/react";
 
 /**
  * «Сколько сэкономите»: два сценария рядом —
- * «сам на конструкторе» vs «с WebIK».
+ * «менеджер отвечает сам» vs «бот поддержки WebIK».
+ * Допущение демо: повторяющиеся вопросы съедают время менеджера на 30 000 ₽ в месяц.
  * Разница (экономия) подсвечена brand-green и анимируется со слайдером.
  */
 export default function SavingsCompare() {
@@ -11,10 +12,10 @@ export default function SavingsCompare() {
   const [months, setMonths] = useState(12);
 
   const { diy, webik, saving } = useMemo(() => {
-    // конструктор: подписка + время на доработки каждый месяц
-    const diyCost = months * (1990 + 9000);
-    // webik: разовая сборка + небольшая поддержка
-    const webikCost = 90_000 + months * 3000;
+    // вручную: время менеджера на однотипные ответы каждый месяц
+    const diyCost = months * 30_000;
+    // webik: бот поддержки по прайсу + сопровождение
+    const webikCost = 120_000 + months * 10_000;
     return {
       diy: Math.round(diyCost),
       webik: Math.round(webikCost),
@@ -45,12 +46,12 @@ export default function SavingsCompare() {
 
       <div className="grid grid-cols-2 gap-3">
         <Scenario
-          label="сам на конструкторе"
+          label="менеджер отвечает сам"
           amount={diy}
           ratio={diy / max}
           tone="muted"
         />
-        <Scenario label="с webik" amount={webik} ratio={webik / max} tone="ink" />
+        <Scenario label="бот webik" amount={webik} ratio={webik / max} tone="ink" />
       </div>
 
       <div className="bg-white rounded-xl border border-black/[0.05] shadow-sm p-4 flex items-center justify-between">

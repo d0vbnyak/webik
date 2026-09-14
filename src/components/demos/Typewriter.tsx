@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 
 const PHRASES = [
-  "сайты под ключ",
+  "лендинги под ключ",
   "telegram-боты",
   "ai-агенты для бизнеса",
-  "seo-продвижение",
+  "обработка документов",
   "ai-колл-центр",
 ];
 

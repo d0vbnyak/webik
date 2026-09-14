@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 
-type Category = "сайты" | "боты" | "дизайн" | "seo";
+type Category = "лендинги" | "боты" | "агенты" | "контент";
 
 type Product = {
   id: string;
@@ -12,21 +12,22 @@ type Product = {
 };
 
 const PRODUCTS: Product[] = [
-  { id: "p1", title: "лендинг", category: "сайты", price: 45000, color: "#1a1a1a" },
-  { id: "p2", title: "корпоративный сайт", category: "сайты", price: 120000, color: "#2e2e2e" },
-  { id: "p3", title: "интернет-магазин", category: "сайты", price: 180000, color: "#1a1a1a" },
-  { id: "p4", title: "telegram-бот", category: "боты", price: 35000, color: "#8e8e8e" },
-  { id: "p5", title: "чат-бот поддержки", category: "боты", price: 60000, color: "#6e6e6e" },
-  { id: "p6", title: "ui-кит", category: "дизайн", price: 40000, color: "#9fff00" },
-  { id: "p7", title: "редизайн", category: "дизайн", price: 90000, color: "#1a1a1a" },
-  { id: "p8", title: "логотип + айдентика", category: "дизайн", price: 55000, color: "#8e8e8e" },
-  { id: "p9", title: "базовое seo", category: "seo", price: 25000, color: "#2e2e2e" },
-  { id: "p10", title: "seo под ключ", category: "seo", price: 80000, color: "#6e6e6e" },
+  { id: "p1", title: "лендинг под ключ", category: "лендинги", price: 65000, color: "#1a1a1a" },
+  { id: "p2", title: "копирайтинг лендинга", category: "лендинги", price: 12000, color: "#2e2e2e" },
+  { id: "p3", title: "сценарный бот", category: "боты", price: 60000, color: "#1a1a1a" },
+  { id: "p4", title: "бот записи", category: "боты", price: 90000, color: "#8e8e8e" },
+  { id: "p5", title: "бот поддержки с ии", category: "боты", price: 120000, color: "#6e6e6e" },
+  { id: "p6", title: "прототип агента", category: "агенты", price: 80000, color: "#9fff00" },
+  { id: "p7", title: "скоринг лидов", category: "агенты", price: 70000, color: "#1a1a1a" },
+  { id: "p8", title: "ocr документов", category: "агенты", price: 50000, color: "#8e8e8e" },
+  { id: "p9", title: "ai-аватар для видео", category: "контент", price: 15000, color: "#2e2e2e" },
+  { id: "p10", title: "email-цепочка", category: "контент", price: 15000, color: "#6e6e6e" },
 ];
 
-const CATEGORIES: Category[] = ["сайты", "боты", "дизайн", "seo"];
-const MIN_PRICE = 25000;
-const MAX_PRICE = 180000;
+const CATEGORIES: Category[] = ["лендинги", "боты", "агенты", "контент"];
+// MAX − MIN должно делиться на шаг слайдера (5000), иначе браузер не даст дойти до максимума
+const MIN_PRICE = 10000;
+const MAX_PRICE = 120000;
 
 export default function CatalogFilter() {
   const uid = useId();

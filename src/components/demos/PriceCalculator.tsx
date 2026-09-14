@@ -2,20 +2,21 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
 const OPTIONS = [
-  { id: "design", label: "уникальный дизайн", price: 30000 },
-  { id: "seo", label: "базовое SEO", price: 15000 },
-  { id: "bot", label: "telegram-бот", price: 25000 },
+  { id: "copy", label: "копирайтинг", price: 12000 },
+  { id: "bot", label: "сценарный бот", price: 60000 },
+  { id: "ai", label: "ai-бот поддержки", price: 120000 },
 ] as const;
 
 export default function PriceCalculator() {
   const [pages, setPages] = useState(5);
-  const [selected, setSelected] = useState<string[]>(["design"]);
+  const [selected, setSelected] = useState<string[]>([]);
 
   const toggle = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
+  // Лендинг по прайсу — от 65 000 ₽ (shared/prices.json): база 45 000 + 5 блоков по 4 000
   const price =
-    20000 +
+    45000 +
     pages * 4000 +
     OPTIONS.filter((o) => selected.includes(o.id)).reduce((sum, o) => sum + o.price, 0);
 
@@ -23,12 +24,12 @@ export default function PriceCalculator() {
     <div className="space-y-5">
       <div>
         <div className="flex justify-between text-xs text-[#1a1a1a]/60 mb-2">
-          <span>страниц на сайте</span>
+          <span>блоков на лендинге</span>
           <span className="font-medium text-[#1a1a1a]">{pages}</span>
         </div>
         <input
           type="range"
-          min={1}
+          min={5}
           max={20}
           value={pages}
           onChange={(e) => setPages(Number(e.target.value))}

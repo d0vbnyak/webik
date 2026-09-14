@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import { isVisible } from "../../shared/visibility";
 import type { ReactNode } from "react";
 
 /* ---------- Иконки (линейные inline-SVG в едином стиле) ---------- */
@@ -226,10 +227,11 @@ const icons = {
 
 /* ---------- Данные каталога (тексты — копирайт WebIK) ---------- */
 
-type Service = { title: string; blurb: string; icon: ReactNode };
+// hidden: услуга снята с продажи — не показывается, но данные сохранены
+type Service = { title: string; blurb: string; icon: ReactNode; hidden?: boolean };
 type Category = { title: string; services: Service[] };
 
-const CATEGORIES: Category[] = [
+const ALL_CATEGORIES: Category[] = [
   {
     title: "Контент и тексты",
     services: [
@@ -264,7 +266,7 @@ const CATEGORIES: Category[] = [
     title: "Графика и дизайн",
     services: [
       { title: "Изображения для рекламы", blurb: "уникальные визуалы для соцсетей без фотографа и дизайнера", icon: icons.image },
-      { title: "Логотип и брендинг", blurb: "базовый фирменный стиль быстро и без долгих согласований", icon: icons.spark },
+      { title: "Логотип и брендинг", blurb: "базовый фирменный стиль быстро и без долгих согласований", icon: icons.spark, hidden: true },
       { title: "Виртуальная фотосессия", blurb: "предметные фото товаров на любом фоне без аренды студии", icon: icons.camera },
       { title: "Примерка в магазине", blurb: "покупатель видит вещь на себе — без возвратов и сомнений", icon: icons.shirt },
     ],
@@ -316,6 +318,22 @@ function ServiceCard({ service, i }: { service: Service; i: number }) {
   );
 }
 
+const CATEGORIES: Category[] = ALL_CATEGORIES.map((cat) => ({
+  ...cat,
+  services: cat.services.filter(isVisible),
+})).filter((cat) => cat.services.length > 0);
+
+const SERVICES_COUNT = CATEGORIES.reduce((sum, cat) => sum + cat.services.length, 0);
+
+/** Русское склонение: 1 услуга, 2 услуги, 5 услуг. */
+function plural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
 /* ---------- Секция-каталог AI-возможностей ---------- */
 
 export default function AiCapabilities() {
@@ -332,7 +350,7 @@ export default function AiCapabilities() {
           AI под ключ
         </span>
         <h2 className="mt-3 font-display font-medium tracking-tight text-3xl sm:text-4xl lg:text-5xl leading-[1.12]">
-          <span className="text-[#1a1a1a]">30 AI-решений</span>
+          <span className="text-[#1a1a1a]">{SERVICES_COUNT} {plural(SERVICES_COUNT, "AI-решение", "AI-решения", "AI-решений")}</span>
           <span className="text-[#8e8e8e]"> — для контента, продаж и рутины.</span>
         </h2>
         <p className="mt-5 max-w-2xl text-base md:text-lg leading-relaxed text-[#1a1a1a]/60">
@@ -359,7 +377,7 @@ export default function AiCapabilities() {
                 {cat.title}
               </h3>
               <span className="ml-auto text-xs text-[#1a1a1a]/35 whitespace-nowrap">
-                {cat.services.length} услуг
+                {cat.services.length} {plural(cat.services.length, "услуга", "услуги", "услуг")}
               </span>
             </motion.div>
 

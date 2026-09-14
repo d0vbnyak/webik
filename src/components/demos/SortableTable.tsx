@@ -9,13 +9,13 @@ type Project = {
 };
 
 const PROJECTS: Project[] = [
-  { id: "r1", name: "лендинг кофейни", days: 14, budget: 45000 },
-  { id: "r2", name: "магазин одежды", days: 45, budget: 180000 },
-  { id: "r3", name: "telegram-бот", days: 10, budget: 35000 },
-  { id: "r4", name: "корпоративный сайт", days: 30, budget: 120000 },
-  { id: "r5", name: "редизайн портала", days: 21, budget: 90000 },
-  { id: "r6", name: "seo под ключ", days: 60, budget: 80000 },
-  { id: "r7", name: "сайт-визитка", days: 7, budget: 25000 },
+  { id: "r1", name: "лендинг кофейни", days: 7, budget: 65000 },
+  { id: "r2", name: "ai-агент для заявок", days: 30, budget: 200000 },
+  { id: "r3", name: "сценарный бот", days: 10, budget: 60000 },
+  { id: "r4", name: "бот поддержки с ии", days: 21, budget: 120000 },
+  { id: "r5", name: "голосовой робот", days: 21, budget: 90000 },
+  { id: "r6", name: "ocr счетов в excel", days: 14, budget: 50000 },
+  { id: "r7", name: "email-цепочка", days: 5, budget: 15000 },
 ];
 
 type Key = keyof Omit<Project, "id">;

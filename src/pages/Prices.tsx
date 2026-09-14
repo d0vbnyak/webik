@@ -88,7 +88,6 @@ export default function Prices() {
                 month: "long",
                 year: "numeric",
               })}
-              .
             </p>
           </motion.div>
         </div>

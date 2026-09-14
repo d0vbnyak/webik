@@ -5,7 +5,7 @@ function OldDesign() {
   return (
     <div className="absolute inset-0 bg-[#d9d2c5] p-4 font-serif">
       <div className="text-[13px] font-bold text-[#5a4632] underline">
-        ООО «Ваш Сайт» — главная страница!!!
+        ООО «Ваша Компания» — главная!!!
       </div>
       <div className="mt-2 h-px bg-[#5a4632]/40" />
       <div className="mt-2 space-y-1">
@@ -32,7 +32,7 @@ function NewDesign() {
         <span className="rounded-full bg-[#1a1a1a] px-2.5 py-1 text-[8px] text-white">начать →</span>
       </div>
       <div className="mt-4 font-display text-sm font-medium leading-tight text-[#1a1a1a]">
-        Сайты, которые <span className="text-[#8e8e8e]">продают.</span>
+        Лендинги, которые <span className="text-[#8e8e8e]">продают.</span>
       </div>
       <div className="mt-2 h-1.5 w-3/5 rounded bg-[#1a1a1a]/10" />
       <div className="mt-1 h-1.5 w-2/5 rounded bg-[#1a1a1a]/10" />

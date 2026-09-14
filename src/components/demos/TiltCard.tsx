@@ -36,10 +36,10 @@ export default function TiltCard() {
           <div className="w-8 h-8 rounded-full bg-brand-green flex items-center justify-center text-[#1a1a1a] text-sm font-bold">
             ✦
           </div>
-          <div className="mt-4 font-display font-medium">Тариф «Бизнес»</div>
-          <div className="mt-1 text-xs text-white/50">сайт + бот + SEO</div>
+          <div className="mt-4 font-display font-medium">Пакет «Лендинг + бот»</div>
+          <div className="mt-1 text-xs text-white/50">лендинг + AI-бот</div>
           <div className="mt-4 text-2xl font-display font-medium">
-            89 000 ₽
+            от 160 000 ₽
           </div>
           <div className="mt-3 inline-block text-[10px] lowercase tracking-wide rounded-full bg-white/10 px-2.5 py-1">
             наведите или коснитесь ↗

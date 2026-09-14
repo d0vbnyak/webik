@@ -9,7 +9,7 @@ const PLANS = [
 
 const ADDONS = [
   { id: "support", label: "поддержка 24/7", price: 12000 },
-  { id: "seo", label: "продвижение в поиске", price: 18000 },
+  { id: "bot", label: "ai-бот на сайте", price: 18000 },
   { id: "analytics", label: "сквозная аналитика", price: 9000 },
   { id: "ab", label: "a/b тесты", price: 7000 },
 ] as const;

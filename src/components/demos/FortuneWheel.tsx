@@ -128,7 +128,7 @@ export default function FortuneWheel() {
           колесо фортуны
         </div>
         <p className="text-[11px] text-[#1a1a1a]/50 leading-snug">
-          крутаните и заберите скидку на разработку сайта
+          крутаните и заберите скидку на запуск лендинга
         </p>
 
         <button

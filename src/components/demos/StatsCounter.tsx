@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, useInView } from "motion/react";
 
+// Цифры — замеры на демо-кейсах WebIK, а не выдуманные «довольные клиенты»
 const STATS = [
-  { target: 120, suffix: "+", label: "проектов" },
-  { target: 98, suffix: "%", label: "довольных клиентов" },
-  { target: 24, suffix: "/7", label: "работают ai-боты" },
+  { target: 14, suffix: "", label: "заявок разбирается за 30 секунд" },
+  { target: 8, suffix: " сек", label: "на счёт от фото до таблицы" },
+  { target: 24, suffix: "/7", label: "отвечает ai-бот" },
 ];
 
 function Counter({ target, suffix, label }: (typeof STATS)[number]) {

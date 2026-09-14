@@ -10,6 +10,7 @@ import Capabilities from "./pages/Capabilities";
 import Prices from "./pages/Prices";
 import Works from "./pages/Works";
 import NotFound from "./pages/NotFound";
+import { SECTIONS } from "../shared/visibility";
 
 // Лендинги-шаблоны — крупные компоненты, грузим лениво (не нужны на остальных страницах)
 const CoffeeLanding = lazy(() => import("./coffe-01/CoffeeLanding"));
@@ -26,11 +27,12 @@ function SiteLayout() {
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/templates" element={<Templates />} />
+          {/* Скрытые разделы — см. shared/visibility.ts. Без флага путь уходит в NotFound */}
+          {SECTIONS.about && <Route path="/about" element={<About />} />}
+          {SECTIONS.templates && <Route path="/templates" element={<Templates />} />}
           <Route path="/capabilities" element={<Capabilities />} />
           <Route path="/prices" element={<Prices />} />
-          <Route path="/works" element={<Works />} />
+          {SECTIONS.works && <Route path="/works" element={<Works />} />}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
@@ -44,33 +46,38 @@ export default function App() {
     <BrowserRouter>
       <ScrollToTop />
       <Routes>
-        {/* Шаблон кофейни — полноэкранный, без общего лейаута сайта; грузится лениво */}
-        <Route
-          path="/templates/coffe-01"
-          element={
-            <Suspense fallback={<div className="min-h-screen bg-[#15100c]" />}>
-              <CoffeeLanding />
-            </Suspense>
-          }
-        />
-        {/* Шаблон фотографа — полноэкранный, без общего лейаута сайта; грузится лениво */}
-        <Route
-          path="/templates/photo-01"
-          element={
-            <Suspense fallback={<div className="min-h-screen bg-white" />}>
-              <PhotoLanding />
-            </Suspense>
-          }
-        />
-        {/* Шаблон портфолио моушн/3D — полноэкранный, тёмный, без общего лейаута; грузится лениво */}
-        <Route
-          path="/templates/portfolio-01"
-          element={
-            <Suspense fallback={<div className="min-h-screen bg-[#07070a]" />}>
-              <PortfolioLanding />
-            </Suspense>
-          }
-        />
+        {/* Шаблоны-лендинги скрыты флагом SECTIONS.templates */}
+        {SECTIONS.templates && (
+          <>
+            {/* Шаблон кофейни — полноэкранный, без общего лейаута сайта; грузится лениво */}
+            <Route
+              path="/templates/coffe-01"
+              element={
+                <Suspense fallback={<div className="min-h-screen bg-[#15100c]" />}>
+                  <CoffeeLanding />
+                </Suspense>
+              }
+            />
+            {/* Шаблон фотографа — полноэкранный, без общего лейаута сайта; грузится лениво */}
+            <Route
+              path="/templates/photo-01"
+              element={
+                <Suspense fallback={<div className="min-h-screen bg-white" />}>
+                  <PhotoLanding />
+                </Suspense>
+              }
+            />
+            {/* Шаблон портфолио моушн/3D — полноэкранный, тёмный, без общего лейаута; грузится лениво */}
+            <Route
+              path="/templates/portfolio-01"
+              element={
+                <Suspense fallback={<div className="min-h-screen bg-[#07070a]" />}>
+                  <PortfolioLanding />
+                </Suspense>
+              }
+            />
+          </>
+        )}
         {/* Закрытая админ-панель — тёмная, со своей навигацией, без общего лейаута */}
         <Route
           path="/admin/*"

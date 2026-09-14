@@ -50,7 +50,7 @@ export default function CountdownTimer() {
           до конца акции
         </div>
         <p className="mt-0.5 text-[11px] text-[#1a1a1a]/50">
-          скидка 20% на запуск сайта
+          скидка 20% на запуск лендинга
         </p>
       </div>
 

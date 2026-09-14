@@ -10,8 +10,8 @@ const STEPS: Step[] = [
     question: "что хотите запустить?",
     options: [
       { id: "landing", label: "лендинг" },
-      { id: "shop", label: "интернет-магазин" },
-      { id: "service", label: "веб-сервис" },
+      { id: "agent", label: "ai-агент" },
+      { id: "voice", label: "голосовой робот" },
       { id: "bot", label: "telegram-бот" },
     ],
   },

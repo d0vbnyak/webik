@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 const W = 320;
 const H = 170;
 const PRIZE = "промокод WEBIK15";
-const SUBTITLE = "−15% на разработку сайта";
+const SUBTITLE = "−15% на запуск лендинга";
 const REVEAL_THRESHOLD = 0.5; // 50% стёрто → авто-дораскрытие
 
 // Поведение кисти

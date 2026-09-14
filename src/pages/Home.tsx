@@ -1,18 +1,24 @@
+import type { ReactNode } from "react";
 import { motion } from "motion/react";
 import { Link } from "react-router";
 import Hero from "../components/Hero";
 import SectionHeading from "../components/SectionHeading";
+import { SECTIONS, isVisible } from "../../shared/visibility";
 
-const SERVICES = [
+type Service = { title: string; text: string; icon: ReactNode; hidden?: boolean };
+
+// Скрытые услуги (hidden) не показываются — WebIK продаёт ИИ-решения и лендинги
+const ALL_SERVICES: Service[] = [
   {
-    title: "Создание веб-сайтов",
-    text: "Лендинги, корпоративные сайты и интернет-магазины под ключ.",
+    title: "Лендинги",
+    text: "Продающие одностраничники с формой заявки и ИИ-ботом внутри.",
     icon: (
       <path d="M3 5h18v12H3zM3 9h18M8 21h8m-4-4v4" />
     ),
   },
   {
     title: "Веб-дизайн",
+    hidden: true,
     text: "UI/UX, айдентика и дизайн-системы, которые продают.",
     icon: (
       <path d="M12 19l7-7-3-3-7 7-1 4zM18 13l-3-3M5 21h.01M3 3l6 6" />
@@ -32,6 +38,7 @@ const SERVICES = [
   },
   {
     title: "SEO-оптимизация",
+    hidden: true,
     text: "Выводим сайты в топ выдачи и приводим органический трафик.",
     icon: (
       <path d="M11 17a6 6 0 100-12 6 6 0 000 12zM21 21l-5-5M8 11l2 2 3-4" />
@@ -60,6 +67,8 @@ const SERVICES = [
   },
 ];
 
+const SERVICES = ALL_SERVICES.filter(isVisible);
+
 export default function Home() {
   return (
     <>
@@ -79,7 +88,7 @@ export default function Home() {
               className="text-3xl sm:text-4xl lg:text-5xl"
             />
 
-            <div className="mt-12 md:mt-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+            <div className="mt-12 md:mt-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
               {SERVICES.map((service, i) => (
                 <motion.div
                   key={service.title}
@@ -126,12 +135,21 @@ export default function Home() {
               >
                 посмотреть возможности <span aria-hidden="true">→</span>
               </Link>
-              <Link
-                to="/templates"
-                className="inline-flex items-center gap-2 px-6 py-3 text-sm lowercase text-[#1a1a1a]/70 hover:text-[#1a1a1a] transition-colors"
-              >
-                выбрать шаблон сайта <span aria-hidden="true">→</span>
-              </Link>
+              {SECTIONS.templates ? (
+                <Link
+                  to="/templates"
+                  className="inline-flex items-center gap-2 px-6 py-3 text-sm lowercase text-[#1a1a1a]/70 hover:text-[#1a1a1a] transition-colors"
+                >
+                  выбрать шаблон сайта <span aria-hidden="true">→</span>
+                </Link>
+              ) : (
+                <Link
+                  to="/prices"
+                  className="inline-flex items-center gap-2 px-6 py-3 text-sm lowercase text-[#1a1a1a]/70 hover:text-[#1a1a1a] transition-colors"
+                >
+                  посмотреть цены <span aria-hidden="true">→</span>
+                </Link>
+              )}
             </motion.div>
           </div>
         </div>

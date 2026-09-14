@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import type { ReactNode } from "react";
 import PageHeader from "../components/PageHeader";
 import PreviewWindow from "../components/PreviewWindow";
+import AiCapabilities from "../components/AiCapabilities";
 import TiltCard from "../components/demos/TiltCard";
 import ParticleField from "../components/demos/ParticleField";
 import ChatBot from "../components/demos/ChatBot";
@@ -13,7 +14,7 @@ import StatsCounter from "../components/demos/StatsCounter";
 import BeforeAfter from "../components/demos/BeforeAfter";
 import ThemeSwitch from "../components/demos/ThemeSwitch";
 
-// Шаблоны виджетов для сайта клиента (0 — CTA, 1-29 — интерактивы)
+// Интерактивы для лендинга клиента (0 — CTA, 1-29 — виджеты)
 import OrderIdeaCard from "../components/demos/OrderIdeaCard";
 import MortgageCalc from "../components/demos/MortgageCalc";
 import PlanConfigurator from "../components/demos/PlanConfigurator";
@@ -98,19 +99,19 @@ const DEMOS: Demo[] = [
   {
     url: "counters",
     title: "Анимированные счётчики",
-    text: "Цифры оживают, когда блок попадает в кадр — идеален для секций «о компании в цифрах».",
+    text: "Цифры оживают, когда блок попадает в кадр. Здесь — наши реальные замеры на демо-кейсах.",
     component: <StatsCounter />,
   },
   {
     url: "before-after",
     title: "До / после",
-    text: "Слайдер сравнения: потяните ручку и посмотрите, как редизайн меняет восприятие сайта.",
+    text: "Слайдер сравнения: потяните ручку и посмотрите, как новый лендинг меняет первое впечатление о компании.",
     component: <BeforeAfter />,
   },
   {
     url: "dark-mode",
     title: "Тёмная тема",
-    text: "Один клик — и интерфейс плавно перекрашивается. Делаем дизайн-системы с обеими темами.",
+    text: "Один клик — и интерфейс плавно перекрашивается. Светлая и тёмная тема для вашего лендинга.",
     component: <ThemeSwitch />,
   },
 ];
@@ -120,7 +121,7 @@ const WIDGETS: Demo[] = [
   {
     url: "your-idea",
     title: "Заказать свою идею",
-    text: "Не нашли нужный виджет? Опишите задачу — соберём интерактив специально под ваш сайт.",
+    text: "Не нашли нужный виджет? Опишите задачу — соберём интерактив специально под ваш лендинг.",
     component: <OrderIdeaCard />,
   },
   {
@@ -327,7 +328,7 @@ export default function Capabilities() {
       <PageHeader
         title="Наши возможности"
         accent="— потрогайте вёрстку руками."
-        subtitle="10 интерактивных мини-проектов прямо на этой странице: каждое окно — живой код, а не картинка. Всё это мы встраиваем в сайты клиентов."
+        subtitle="Живой AI-чат, каталог AI-решений и интерактивы для лендингов — каждое окно здесь живой код, а не картинка."
       />
 
       <div className="max-w-7xl mx-auto px-8 md:px-16 lg:px-20 grid grid-cols-12 gap-x-4 md:gap-x-8">
@@ -337,6 +338,10 @@ export default function Capabilities() {
               <PreviewCard key={demo.url} demo={demo} i={i} />
             ))}
           </div>
+
+          {/* Каталог AI-решений — главное предложение WebIK. Раньше жил на /works,
+              но та страница скрыта (shared/visibility.ts), а каталог нужен */}
+          <AiCapabilities />
 
           {/* Каталог готовых виджет-шаблонов */}
           <div className="mt-24 md:mt-32">
@@ -350,8 +355,8 @@ export default function Capabilities() {
                 каталог
               </span>
               <h2 className="mt-3 font-display font-medium tracking-tight text-3xl sm:text-4xl lg:text-5xl leading-[1.12]">
-                <span className="text-[#1a1a1a]">Шаблоны виджетов</span>
-                <span className="text-[#8e8e8e]"> для вашего сайта.</span>
+                <span className="text-[#1a1a1a]">Интерактивы</span>
+                <span className="text-[#8e8e8e]"> для вашего лендинга.</span>
               </h2>
               <p className="mt-5 max-w-2xl text-base md:text-lg leading-relaxed text-[#1a1a1a]/60">
                 29 готовых интерактивов — калькуляторы, игры, формы, графики. Любой

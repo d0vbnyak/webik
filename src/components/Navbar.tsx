@@ -2,16 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import Logo from "./Logo";
+import { isVisible, type Section } from "../../shared/visibility";
 
 const MOBILE_MENU_ID = "mobile-nav-panel";
 
-const NAV_LINKS = [
-  { to: "/about", label: "о нас" },
-  { to: "/templates", label: "шаблоны" },
-  { to: "/capabilities", label: "возможности" },
-  { to: "/prices", label: "цены" },
-  { to: "/works", label: "другие работы" },
-];
+// Ссылки на скрытые разделы отфильтровываются — см. shared/visibility.ts
+const NAV_LINKS = (
+  [
+    { to: "/about", label: "о нас", section: "about" },
+    { to: "/templates", label: "шаблоны", section: "templates" },
+    { to: "/capabilities", label: "возможности" },
+    { to: "/prices", label: "цены" },
+    { to: "/works", label: "другие работы", section: "works" },
+  ] satisfies { to: string; label: string; section?: Section }[]
+).filter(isVisible);
 
 const desktopLinkClass = ({ isActive }: { isActive: boolean }) =>
   `text-xs lg:text-sm lowercase tracking-wide transition-colors whitespace-nowrap ${

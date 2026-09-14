@@ -3,16 +3,16 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 type Choice = { id: string; label: string; price: number };
 
-const SITE_TYPES: Choice[] = [
-  { id: "landing", label: "лендинг", price: 40000 },
-  { id: "corp", label: "корпоративный", price: 90000 },
-  { id: "shop", label: "магазин", price: 150000 },
+const SOLUTIONS: Choice[] = [
+  { id: "landing", label: "лендинг", price: 65000 },
+  { id: "bot", label: "ai-бот", price: 120000 },
+  { id: "agent", label: "прототип агента", price: 80000 },
 ];
 
 const MODULES: Choice[] = [
-  { id: "blog", label: "блог", price: 15000 },
+  { id: "1c", label: "интеграция с 1с", price: 30000 },
   { id: "crm", label: "интеграция с crm", price: 25000 },
-  { id: "pay", label: "онлайн-оплата", price: 20000 },
+  { id: "report", label: "дашборд с отчётами", price: 20000 },
   { id: "multi", label: "две языковые версии", price: 18000 },
 ];
 
@@ -22,7 +22,7 @@ const URGENCY: Choice[] = [
   { id: "asap", label: "срочно", price: 50000 },
 ];
 
-const STEP_TITLES = ["тип сайта", "модули", "срочность"];
+const STEP_TITLES = ["решение", "модули", "срочность"];
 
 /** Анимированный счётчик итоговой суммы. */
 function AnimatedTotal({ value }: { value: number }) {
@@ -64,7 +64,7 @@ export default function OfferWizard() {
   const uid = useId();
   const reduce = useReducedMotion();
   const [step, setStep] = useState(0);
-  const [siteType, setSiteType] = useState<string>("landing");
+  const [solution, setSolution] = useState<string>("landing");
   const [modules, setModules] = useState<string[]>([]);
   const [urgency, setUrgency] = useState<string>("flex");
   const [dir, setDir] = useState(1);
@@ -72,17 +72,17 @@ export default function OfferWizard() {
   const TOTAL_STEPS = 3;
   const done = step >= TOTAL_STEPS;
 
-  const siteChoice = SITE_TYPES.find((s) => s.id === siteType)!;
+  const solutionChoice = SOLUTIONS.find((s) => s.id === solution)!;
   const moduleChoices = MODULES.filter((m) => modules.includes(m.id));
   const urgencyChoice = URGENCY.find((u) => u.id === urgency)!;
 
   const total =
-    siteChoice.price +
+    solutionChoice.price +
     moduleChoices.reduce((sum, m) => sum + m.price, 0) +
     urgencyChoice.price;
 
   const lineItems: Choice[] = [
-    siteChoice,
+    solutionChoice,
     ...moduleChoices,
     ...(urgencyChoice.price > 0 ? [urgencyChoice] : []),
   ];
@@ -96,7 +96,7 @@ export default function OfferWizard() {
   };
 
   const reset = () => {
-    setSiteType("landing");
+    setSolution("landing");
     setModules([]);
     setUrgency("flex");
     setDir(-1);
@@ -227,7 +227,7 @@ export default function OfferWizard() {
                 className="mt-3"
               >
                 {step === 0 &&
-                  renderPills(SITE_TYPES, siteType, setSiteType, false)}
+                  renderPills(SOLUTIONS, solution, setSolution, false)}
                 {step === 1 &&
                   renderPills(MODULES, modules, toggleModule, true)}
                 {step === 2 && renderPills(URGENCY, urgency, setUrgency, false)}

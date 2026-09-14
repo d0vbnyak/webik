@@ -1,21 +1,30 @@
 import { Link } from "react-router";
 import Logo from "./Logo";
+import { isVisible, type Section } from "../../shared/visibility";
 
-const PAGES = [
-  { to: "/about", label: "о нас" },
-  { to: "/templates", label: "шаблоны" },
-  { to: "/capabilities", label: "возможности" },
-  { to: "/works", label: "другие работы" },
-];
+// Скрытые разделы и услуги отфильтровываются — см. shared/visibility.ts
+const PAGES = (
+  [
+    { to: "/about", label: "о нас", section: "about" },
+    { to: "/templates", label: "шаблоны", section: "templates" },
+    { to: "/capabilities", label: "возможности" },
+    { to: "/prices", label: "цены" },
+    { to: "/works", label: "другие работы", section: "works" },
+  ] satisfies { to: string; label: string; section?: Section }[]
+).filter(isVisible);
 
-const SERVICES = [
-  "создание сайтов",
-  "веб-дизайн",
-  "telegram и MAX боты",
-  "seo-оптимизация",
-  "ai-агенты",
-  "ai-колл-центр",
-];
+const SERVICES = (
+  [
+    { label: "создание сайтов", hidden: true },
+    { label: "лендинги" },
+    { label: "веб-дизайн", hidden: true },
+    { label: "telegram и MAX боты" },
+    { label: "seo-оптимизация", hidden: true },
+    { label: "ai-агенты" },
+    { label: "ai-колл-центр" },
+    { label: "ai-контент и документы" },
+  ] satisfies { label: string; hidden?: boolean }[]
+).filter(isVisible);
 
 export default function Footer() {
   return (
@@ -24,8 +33,8 @@ export default function Footer() {
         <div className="col-span-12 md:col-span-5">
           <Logo variant="white" />
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-[#1a1a1a]/60">
-            Веб-студия полного цикла: сайты, дизайн, боты и AI-решения для
-            вашего бизнеса.
+            AI-решения для бизнеса: боты, агенты, голосовые роботы и
+            лендинги, которые приводят заявки.
           </p>
         </div>
 
@@ -53,8 +62,8 @@ export default function Footer() {
           </div>
           <ul className="flex flex-col gap-2.5">
             {SERVICES.map((s) => (
-              <li key={s} className="text-sm lowercase text-[#1a1a1a]/70">
-                {s}
+              <li key={s.label} className="text-sm lowercase text-[#1a1a1a]/70">
+                {s.label}
               </li>
             ))}
           </ul>
@@ -62,7 +71,7 @@ export default function Footer() {
 
         <div className="col-span-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-8 border-t border-black/[0.06]">
           <span className="text-[11px] tracking-wide text-[#1a1a1a]/50">
-            © 2026 WebIK — веб-студия и AI-решения
+            © 2026 WebIK — AI-решения для бизнеса
           </span>
           <a
             href="mailto:hello@webik.ru"

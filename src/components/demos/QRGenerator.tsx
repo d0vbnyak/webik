@@ -146,7 +146,7 @@ export default function QRGenerator() {
           className="w-full rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-sm text-[#1a1a1a] outline-none focus:border-[#1a1a1a]/40 transition-colors"
         />
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {["webik.ru", "сайт за 7 дней", "+7 999 000-00-00"].map((p) => (
+          {["webik.ru", "лендинг за неделю", "+7 999 000-00-00"].map((p) => (
             <button
               key={p}
               type="button"

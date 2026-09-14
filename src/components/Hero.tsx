@@ -85,7 +85,7 @@ export default function Hero() {
             className="font-display font-medium tracking-tight text-[2rem] leading-[1.14] sm:text-5xl lg:text-6xl xl:text-[64px]"
           >
             <span className="text-[#1a1a1a]">WebIK создаёт </span>
-            <span className="text-[#8e8e8e]">сайты,</span>
+            <span className="text-[#8e8e8e]">лендинги,</span>
             <br className="hidden sm:inline" />
             <span className="text-[#8e8e8e]"> ботов и AI-решения, которые</span>
             <br className="hidden sm:inline" />
@@ -159,7 +159,7 @@ export default function Hero() {
 
       {/* Якорь — низ справа */}
       <div className="absolute bottom-5 right-5 md:right-8 z-20 text-[11px] tracking-wide text-[#1a1a1a]/70">
-        веб-студия и AI-решения
+        AI-решения для бизнеса
       </div>
     </section>
   );
