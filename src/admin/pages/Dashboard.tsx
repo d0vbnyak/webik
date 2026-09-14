@@ -7,7 +7,7 @@ import { useSettings } from "../hooks/useSettings";
 import { useGoals } from "../hooks/useGoals";
 import { useRecurring } from "../hooks/useRecurring";
 import { useLeads } from "../hooks/useLeads";
-import { dueToday } from "../lib/crm";
+import { dueToday, pluralDeals } from "../lib/crm";
 import { formatMoney, formatDate, monthLabel, todayISO } from "../lib/dates";
 import { remainingToPay, isOverdue, taxReserve } from "../lib/finance";
 import { shouldRemind, daysUntil } from "../lib/recurring";
@@ -82,7 +82,7 @@ export default function Dashboard() {
                       ? "…"
                       : crmToday.length === 0
                         ? "Дел по лидам нет"
-                        : `${crmToday.length} дел` + (crmOverdue ? ` · ${crmOverdue} просрочено` : "")}
+                        : pluralDeals(crmToday.length) + (crmOverdue ? ` · просрочено: ${crmOverdue}` : "")}
                   </p>
                 </div>
                 <span className={`font-display text-2xl font-semibold ${crmOverdue ? "text-red-400" : "text-brand-green"}`}>

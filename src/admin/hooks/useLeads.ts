@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { leadKey, type ImportedLead } from "../lib/leadImport";
+import { dropDuplicates, FIRST_EMAIL_STEP, scheduleFirstEmails, type ImportedLead } from "../lib/leadImport";
 import type { StageChange } from "../lib/crm";
 import { todayISO } from "../lib/dates";
 import type { Lead, LeadTouch, NewLead, TouchType } from "../lib/types";
 
 type LeadPatch = Partial<Omit<Lead, "id" | "user_id" | "created_at">>;
 
-/** Все лиды воронки. Сортировка: ближайший шаг выше, без шага — в конце. */
+/**
+ * Все лиды воронки. Сортировка: ближайший шаг выше, без шага — в конце.
+ * Supabase по умолчанию отдаёт не больше 1000 строк — для одного человека с
+ * холодным аутричем это годы работы; если упрёмся, нужна постраничная выгрузка.
+ */
 export function useLeads() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,46 +42,53 @@ export function useLeads() {
   }, []);
 
   /**
-   * Импорт: дубли (тот же сайт или название) пропускаются, касания из таблицы
-   * пишутся следом. Возвращает, сколько добавлено и сколько было уже в базе.
+   * Импорт: дубли с базой (по сайту или названию) пропускаются, первые письма
+   * планируются уже после этого — с учётом писем, стоящих в базе на те же дни.
+   * Касания из таблицы пишутся следом.
    */
   const importMany = useCallback(
     async (items: ImportedLead[]): Promise<{ added: number; skipped: number; error: string | null }> => {
-      const { data: existing, error: selErr } = await supabase.from("leads").select("company, website");
+      const { data: existing, error: selErr } = await supabase
+        .from("leads")
+        .select("company, website, next_step, next_step_date");
       if (selErr) return { added: 0, skipped: 0, error: selErr.message };
+      const rows = (existing ?? []) as Pick<Lead, "company" | "website" | "next_step" | "next_step_date">[];
 
-      const seen = new Set((existing ?? []).map((l) => leadKey(l as Pick<Lead, "company" | "website">)));
-      const fresh: ImportedLead[] = [];
-      for (const item of items) {
-        const key = leadKey(item.lead);
-        if (seen.has(key)) continue;
-        seen.add(key); // и дубли внутри самой вставки
-        fresh.push(item);
-      }
-      const skipped = items.length - fresh.length;
+      const today = todayISO();
+      const { fresh, skipped } = dropDuplicates(items, rows);
       if (fresh.length === 0) return { added: 0, skipped, error: null };
+
+      const booked: Record<string, number> = {};
+      for (const r of rows) {
+        if (r.next_step === FIRST_EMAIL_STEP && r.next_step_date && r.next_step_date >= today) {
+          booked[r.next_step_date] = (booked[r.next_step_date] ?? 0) + 1;
+        }
+      }
+      // Копия: превью в модалке не должно меняться, если импорт упадёт
+      const planned = scheduleFirstEmails(
+        fresh.map((i) => ({ ...i, lead: { ...i.lead } })),
+        today,
+        booked,
+      );
 
       const { data: inserted, error: insErr } = await supabase
         .from("leads")
-        .insert(fresh.map((i) => i.lead))
-        .select("id, company, website");
+        .insert(planned.map((i) => ({ ...i.lead, stage_changed_at: `${i.stageChangedOn}T12:00:00` })))
+        .select("id");
       if (insErr) return { added: 0, skipped, error: insErr.message };
 
-      // Касания привязываем по ключу, а не по порядку ответа
-      const idByKey = new Map((inserted ?? []).map((l) => [leadKey(l as Pick<Lead, "company" | "website">), l.id as string]));
-      const touches = fresh.flatMap((item) => {
-        const leadId = idByKey.get(leadKey(item.lead));
-        return leadId ? item.touches.map((t) => ({ ...t, lead_id: leadId })) : [];
-      });
+      // PostgREST возвращает строки в порядке вставки
+      const ids = ((inserted ?? []) as { id: string }[]).map((r) => r.id);
+      const touches = planned.flatMap((item, i) =>
+        ids[i] ? item.touches.map((t) => ({ ...t, lead_id: ids[i] })) : [],
+      );
+      let touchError: string | null = null;
       if (touches.length > 0) {
         const { error: tErr } = await supabase.from("lead_touches").insert(touches);
-        if (tErr) {
-          await load();
-          return { added: fresh.length, skipped, error: `Лиды добавлены, но история касаний не записалась: ${tErr.message}` };
-        }
+        if (tErr) touchError = `Лиды добавлены, но история касаний из таблицы не записалась: ${tErr.message}`;
       }
       await load();
-      return { added: fresh.length, skipped, error: null };
+      return { added: planned.length, skipped, error: touchError };
     },
     [load],
   );
@@ -85,17 +96,29 @@ export function useLeads() {
   return { leads, loading, error, add, importMany, reload: load };
 }
 
+/** Ответ хука на запись: error — ничего не записано, partial — записана только часть. */
+export type WriteResult = { error: string | null; partial?: boolean };
+
 /** Одна карточка лида: сам лид, история касаний, доходы привязанного клиента. */
 export function useLead(id: string | undefined) {
   const [lead, setLead] = useState<Lead | null>(null);
   const [touches, setTouches] = useState<LeadTouch[]>([]);
   const [clientIncome, setClientIncome] = useState<{ amount: number; paid: number } | null>(null);
+  const [incomeError, setIncomeError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Ответ для прошлого id не должен перезаписать открытую карточку
+  const currentId = useRef(id);
+  currentId.current = id;
 
   const loadIncome = useCallback(async (clientId: string | null) => {
+    setIncomeError(null);
     if (!clientId) return setClientIncome(null);
-    const { data } = await supabase.from("incomes").select("amount, paid_amount").eq("client_id", clientId);
+    const { data, error: selErr } = await supabase.from("incomes").select("amount, paid_amount").eq("client_id", clientId);
+    if (selErr) {
+      setClientIncome(null);
+      return setIncomeError(selErr.message);
+    }
     const rows = (data ?? []) as { amount: number; paid_amount: number }[];
     setClientIncome({
       amount: rows.reduce((s, r) => s + Number(r.amount), 0),
@@ -104,7 +127,10 @@ export function useLead(id: string | undefined) {
   }, []);
 
   const load = useCallback(async () => {
-    if (!id) return;
+    if (!id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     const [leadRes, touchRes] = await Promise.all([
@@ -116,6 +142,7 @@ export function useLead(id: string | undefined) {
         .order("date", { ascending: false })
         .order("created_at", { ascending: false }),
     ]);
+    if (currentId.current !== id) return;
     if (leadRes.error || touchRes.error) {
       setError((leadRes.error ?? touchRes.error)!.message);
     } else {
@@ -124,7 +151,7 @@ export function useLead(id: string | undefined) {
       setTouches((touchRes.data ?? []) as LeadTouch[]);
       await loadIncome(l?.client_id ?? null);
     }
-    setLoading(false);
+    if (currentId.current === id) setLoading(false);
   }, [id, loadIncome]);
 
   useEffect(() => {
@@ -132,7 +159,7 @@ export function useLead(id: string | undefined) {
   }, [load]);
 
   const update = useCallback(
-    async (patch: LeadPatch) => {
+    async (patch: LeadPatch): Promise<WriteResult> => {
       if (!id) return { error: "Нет лида" };
       const { data, error: updErr } = await supabase.from("leads").update(patch).eq("id", id).select().single();
       if (updErr) return { error: updErr.message };
@@ -143,7 +170,7 @@ export function useLead(id: string | undefined) {
   );
 
   const addTouch = useCallback(
-    async (touch: { type: TouchType; date: string; comment: string | null }) => {
+    async (touch: { type: TouchType; date: string; comment: string | null }): Promise<WriteResult> => {
       if (!id) return { error: "Нет лида" };
       const { data, error: insErr } = await supabase
         .from("lead_touches")
@@ -161,31 +188,41 @@ export function useLead(id: string | undefined) {
     [id],
   );
 
-  /** Смена этапа: патч лида + запись в историю. Патч собирается в crm.buildStageChange. */
+  /**
+   * Смена этапа: патч лида + запись в историю. Патч собирается в crm.buildStageChange.
+   * Если этап сменился, а история не записалась — partial: повторять смену нельзя,
+   * иначе в истории появится «Отправлено → Отправлено».
+   */
   const changeStage = useCallback(
-    async (patch: StageChange, historyComment: string) => {
+    async (patch: StageChange, historyComment: string): Promise<WriteResult> => {
       const res = await update({ ...patch, stage_changed_at: new Date().toISOString() });
       if (res.error) return res;
-      return addTouch({ type: "stage", date: todayISO(), comment: historyComment });
+      const hist = await addTouch({ type: "stage", date: todayISO(), comment: historyComment });
+      if (hist.error) return { error: `Этап сменён, но запись в историю не сохранилась: ${hist.error}`, partial: true };
+      return { error: null };
     },
     [update, addTouch],
   );
 
-  const removeTouch = useCallback(async (touchId: string) => {
+  const removeTouch = useCallback(async (touchId: string): Promise<WriteResult> => {
     const { error: delErr } = await supabase.from("lead_touches").delete().eq("id", touchId);
     if (delErr) return { error: delErr.message };
     setTouches((prev) => prev.filter((t) => t.id !== touchId));
     return { error: null };
   }, []);
 
-  const remove = useCallback(async () => {
+  const remove = useCallback(async (): Promise<WriteResult> => {
     if (!id) return { error: "Нет лида" };
     const { error: delErr } = await supabase.from("leads").delete().eq("id", id);
     return { error: delErr?.message ?? null };
   }, [id]);
 
-  /** Лид → клиент: создаёт запись в «Клиентах» и привязывает к лиду. Доходы вешаются на клиента. */
-  const makeClient = useCallback(async () => {
+  /**
+   * Лид → клиент: создаёт запись в «Клиентах» и привязывает к лиду. Доходы вешаются
+   * на клиента. Если привязать не вышло — созданный клиент удаляется, чтобы
+   * повторное нажатие не плодило сирот.
+   */
+  const makeClient = useCallback(async (): Promise<WriteResult> => {
     if (!lead) return { error: "Нет лида" };
     if (lead.client_id) return { error: null };
     const { data, error: insErr } = await supabase
@@ -199,10 +236,29 @@ export function useLead(id: string | undefined) {
       .select("id")
       .single();
     if (insErr) return { error: insErr.message };
-    const res = await update({ client_id: (data as { id: string }).id });
-    if (!res.error) await loadIncome((data as { id: string }).id);
+    const clientId = (data as { id: string }).id;
+    const res = await update({ client_id: clientId });
+    if (res.error) {
+      await supabase.from("clients").delete().eq("id", clientId);
+      return res;
+    }
+    await loadIncome(clientId);
     return res;
   }, [lead, update, loadIncome]);
 
-  return { lead, touches, clientIncome, loading, error, update, addTouch, removeTouch, changeStage, remove, makeClient, reload: load };
+  return {
+    lead,
+    touches,
+    clientIncome,
+    incomeError,
+    loading,
+    error,
+    update,
+    addTouch,
+    removeTouch,
+    changeStage,
+    remove,
+    makeClient,
+    reload: load,
+  };
 }

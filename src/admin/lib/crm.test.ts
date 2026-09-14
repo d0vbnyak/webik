@@ -6,7 +6,10 @@ import {
   dueToday,
   funnel,
   lostReasons,
+  localMonth,
   nextReachedStage,
+  nextStepError,
+  pluralDeals,
   stageAfterTouch,
   stageLabel,
 } from "./crm";
@@ -58,6 +61,10 @@ describe("buildStageChange", () => {
     const r = buildStageChange({ reached_stage: "call" }, "lost", { lostReason: "price" });
     expect(r.patch).toMatchObject({ stage: "lost", reached_stage: "call", lost_reason: "price", next_step: null });
   });
+  it("дата без шага не принимается", () => {
+    expect(nextStepError("", "2026-09-15")).toBe("Напишите, что сделать, или очистите дату");
+    expect(nextStepError("  ", "")).toBeNull();
+  });
   it("шаг без даты не принимается", () => {
     const r = buildStageChange({ reached_stage: "sent" }, "replied", { nextStep: "Ответить" });
     expect(r.error).toBe("Укажите дату следующего шага");
@@ -99,10 +106,9 @@ describe("funnel", () => {
     const by = Object.fromEntries(rows.map((r) => [r.stage, r]));
     expect(by.sent.reached).toBe(7);
     expect(by.replied.reached).toBe(3);
-    // ответ считается от отправленных, «вдогонку» не делит воронку
-    expect(by.replied.fromPrev).toBe(43);
-    expect(by.followup.fromPrev).toBeNull();
+    expect(by.replied.fromPrev).toBe(43); // 3 из 7 отправленных
     expect(by.check.reached).toBe(2); // созвон и КП прошли через этап «проверка» по порядку
+    expect(by.followup).toBeUndefined(); // «Вдогонку» в отчёте не показывается
   });
   it("«не писал» в воронку не входит, пустая база — без деления на ноль", () => {
     const rows = funnel(leads(["new"]));
@@ -125,8 +131,10 @@ describe("lostReasons", () => {
     expect(lostReasons([lost("price"), lost("timing"), lost("data")]).signal).toBeNull();
     expect(lostReasons([lost("price"), lost("price")]).signal).toBeNull();
   });
-  it("без причины — отдельной строкой", () => {
-    expect(lostReasons([lost(null)]).rows[0].label).toBe("без причины");
+  it("без причины — отдельной строкой, но не сигнал", () => {
+    const r = lostReasons([lost(null), lost(null), lost(null), lost("price")]);
+    expect(r.rows[0].label).toBe("без причины");
+    expect(r.signal).toBeNull();
   });
 });
 
@@ -148,4 +156,15 @@ describe("stageAfterTouch", () => {
 it("stageLabel", () => {
   expect(stageLabel("proposal")).toBe("КП");
   expect(stageLabel("lost")).toBe("Отказ");
+});
+
+it("pluralDeals", () => {
+  expect([0, 1, 2, 5, 11, 12, 21, 22, 25, 111].map(pluralDeals)).toEqual([
+    "0 дел", "1 дело", "2 дела", "5 дел", "11 дел", "12 дел", "21 дело", "22 дела", "25 дел", "111 дел",
+  ]);
+});
+
+it("localMonth — по локальному времени", () => {
+  const d = new Date(2026, 8, 1, 0, 30); // 1 сентября, 00:30 местного
+  expect(localMonth(d.toISOString())).toBe("2026-09");
 });

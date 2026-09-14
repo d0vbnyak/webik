@@ -12,6 +12,7 @@ import {
   buildStageChange,
   defaultNextStep,
   lostReasonLabel,
+  nextStepError,
   stageAfterTouch,
   stageIndex,
   stageLabel,
@@ -50,8 +51,20 @@ export default function LeadCard() {
   const { id } = useParams();
   const navigate = useNavigate();
   const today = todayISO();
-  const { lead, touches, clientIncome, loading, error, update, addTouch, removeTouch, changeStage, remove, makeClient } =
-    useLead(id);
+  const {
+    lead,
+    touches,
+    clientIncome,
+    incomeError,
+    loading,
+    error,
+    update,
+    addTouch,
+    removeTouch,
+    changeStage,
+    remove,
+    makeClient,
+  } = useLead(id);
 
   const [stageOpen, setStageOpen] = useState(false);
   const [stageForm, setStageForm] = useState<StageForm | null>(null);
@@ -63,6 +76,7 @@ export default function LeadCard() {
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [makingClient, setMakingClient] = useState(false);
 
   if (loading) return <div className="py-10 text-center"><Spinner /></div>;
   if (error) return <p className="text-sm text-red-400">Ошибка загрузки: {error}</p>;
@@ -74,15 +88,27 @@ export default function LeadCard() {
     );
   }
 
+  /** Для текущего этапа — его шаг как есть, для нового — шаг по умолчанию. */
+  function stepFor(stage: LeadStage) {
+    if (stage === lead!.stage) return { text: lead!.next_step ?? "", date: lead!.next_step_date ?? "" };
+    return defaultNextStep(stage, today);
+  }
+
   function openStage(stage: LeadStage = lead!.stage) {
-    const next = defaultNextStep(stage, today);
-    setStageForm({ stage, reason: "", nextStep: next.text, nextStepDate: next.date, comment: "" });
+    const next = stepFor(stage);
+    setStageForm({
+      stage,
+      reason: stage === lead!.stage ? (lead!.lost_reason ?? "") : "",
+      nextStep: next.text,
+      nextStepDate: next.date,
+      comment: "",
+    });
     setFormError(null);
     setStageOpen(true);
   }
 
   function pickStage(stage: LeadStage) {
-    const next = defaultNextStep(stage, today);
+    const next = stepFor(stage);
     setStageForm((f) => f && { ...f, stage, nextStep: next.text, nextStepDate: next.date });
   }
 
@@ -100,7 +126,9 @@ export default function LeadCard() {
     setSaving(true);
     const res = await changeStage(built.patch, parts.join(" · "));
     setSaving(false);
-    if (res.error) return setFormError(res.error);
+    if (res.error && !res.partial) return setFormError(res.error);
+    // Частичная запись — модалку закрываем, чтобы повтор не задвоил историю
+    setActionError(res.error);
     setStageOpen(false);
   }
 
@@ -122,6 +150,9 @@ export default function LeadCard() {
       setSaving(false);
       return setFormError(res.error);
     }
+    // Касание уже записано: дальше модалка закрывается при любом исходе,
+    // иначе повторное «Записать» задвоит касание
+    let followUpError: string | null = null;
     if (touchMovesTo) {
       // Касание двигает этап — следующий шаг считается от даты касания
       const next = defaultNextStep(touchMovesTo, touchForm.date);
@@ -132,12 +163,12 @@ export default function LeadCard() {
           `${stageLabel(lead.stage)} → ${stageLabel(touchMovesTo)} · по касанию «${touchLabel(touchForm.type)}»`,
         );
         if (moved.error) {
-          setSaving(false);
-          return setFormError(`Касание записано, но этап не сменился: ${moved.error}`);
+          followUpError = moved.partial ? moved.error : `Касание записано, но этап не сменился: ${moved.error}`;
         }
       }
     }
     setSaving(false);
+    setActionError(followUpError);
     setTouchOpen(false);
   }
 
@@ -157,11 +188,15 @@ export default function LeadCard() {
 
   async function saveEdit() {
     if (!editForm.company?.trim()) return setFormError("Введите название компании");
-    if (editForm.next_step.trim() && !editForm.next_step_date) return setFormError("Укажите дату следующего шага");
+    const stepError = nextStepError(editForm.next_step, editForm.next_step_date);
+    if (stepError) return setFormError(stepError);
     const patch: Record<string, unknown> = {};
     for (const { key } of TEXT_FIELDS) {
       const v = editForm[key].trim();
-      patch[key] = key === "telegram_username" ? v.replace(/^@/, "") || null : v || null;
+      patch[key] =
+        key === "telegram_username"
+          ? v.replace(/^(https?:\/\/)?(t\.me|telegram\.me)\//i, "").replace(/^@/, "") || null
+          : v || null;
     }
     patch.company = editForm.company.trim();
     patch.source = editForm.source || null;
@@ -186,8 +221,16 @@ export default function LeadCard() {
 
   async function toClient() {
     setActionError(null);
+    setMakingClient(true);
     const res = await makeClient();
+    setMakingClient(false);
     if (res.error) setActionError(res.error);
+  }
+
+  async function deleteTouch(touchId: string) {
+    setActionError(null);
+    const res = await removeTouch(touchId);
+    if (res.error) setActionError(`Не удалось удалить запись: ${res.error}`);
   }
 
   async function deleteLead() {
@@ -218,7 +261,7 @@ export default function LeadCard() {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="font-display text-2xl font-semibold tracking-tight">{lead.company}</h1>
+          <h1 className="break-words font-display text-2xl font-semibold tracking-tight">{lead.company}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
             <StageChip stage={lead.stage} />
             {lead.stage === "lost" && <span className="text-red-400">{lostReasonLabel(lead.lost_reason)}</span>}
@@ -335,6 +378,7 @@ export default function LeadCard() {
                 <Link to="/admin/clients" className="text-brand-green hover:underline">создан</Link>
               ) : null}
             </Row>
+            {incomeError && <Row label="Доходы"><span className="text-red-400">не загрузились</span></Row>}
             {clientIncome && (
               <Row label="Доходы">
                 {formatMoney(clientIncome.amount)}
@@ -344,8 +388,8 @@ export default function LeadCard() {
           </dl>
           {!lead.client_id && (
             <div className="mt-3">
-              <button type="button" onClick={() => void toClient()} className={btnGhost}>
-                Сделать клиентом
+              <button type="button" onClick={() => void toClient()} disabled={makingClient} className={`${btnGhost} disabled:opacity-60`}>
+                {makingClient ? <Spinner /> : "Сделать клиентом"}
               </button>
               <p className="mt-1 text-xs text-zinc-500">
                 Создаст запись в «Клиентах», к ней привязываются доходы. Обычно — когда подписан
@@ -389,7 +433,7 @@ export default function LeadCard() {
                   </div>
                   {t.comment && <div className="whitespace-pre-line break-words text-zinc-200">{t.comment}</div>}
                 </div>
-                <ConfirmDelete onConfirm={() => void removeTouch(t.id)} label="✕" />
+                <ConfirmDelete onConfirm={() => void deleteTouch(t.id)} label="✕" />
               </li>
             ))}
           </ul>

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { useLeads } from "../hooks/useLeads";
-import { funnel, isColdSource, lostReasons, stageIndex } from "../lib/crm";
+import { funnel, isColdSource, localMonth, lostReasons, stageIndex } from "../lib/crm";
 import { formatMoney, todayISO } from "../lib/dates";
 import Card from "../components/Card";
 import Spinner from "../components/Spinner";
@@ -41,7 +41,7 @@ export default function CrmReport() {
   const reasons = useMemo(
     () =>
       lostReasons(
-        period === "all" ? leads : leads.filter((l) => l.stage_changed_at.slice(0, 7) === monthPrefix),
+        period === "all" ? leads : leads.filter((l) => localMonth(l.stage_changed_at) === monthPrefix),
       ),
     [leads, period, monthPrefix],
   );
@@ -116,7 +116,7 @@ export default function CrmReport() {
             </ul>
             <p className="mt-3 text-xs text-zinc-500">
               Процент — от предыдущего этапа. Лид учитывается на всех этапах, до которых дошёл, даже если
-              потом отказался. «Вдогонку» — справочно: ответить могут и на первое письмо.
+              потом отказался. «Вдогонку» не показывается: ответить могут и на первое письмо.
               {cohort === "cold" && " После 100 отправленных писем замените допущения в Воронка.md фактом."}
             </p>
           </Card>

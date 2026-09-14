@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useLeads } from "../hooks/useLeads";
-import { ALL_STAGES, SOURCES, VARIANTS, defaultNextStep, dueToday, isColdSource, stageLabel } from "../lib/crm";
-import { parseTable, rowsToLeads, scheduleFirstEmails, type ImportedLead } from "../lib/leadImport";
+import { ALL_STAGES, SOURCES, VARIANTS, defaultNextStep, dueToday, isColdSource, pluralDeals, stageLabel } from "../lib/crm";
+import { parseTable, rowsToLeads, type ImportedLead } from "../lib/leadImport";
 import { formatDate, todayISO } from "../lib/dates";
 import { daysUntil } from "../lib/recurring";
 import type { Lead, LeadStage } from "../lib/types";
@@ -134,9 +134,14 @@ export default function Crm() {
 
   function parseImport() {
     setImportResult(null);
-    const parsed = rowsToLeads(parseTable(importText), today);
-    scheduleFirstEmails(parsed.items, today);
-    setPreview(parsed);
+    const table = parseTable(importText);
+    if (table.unclosedQuote) {
+      return setPreview({
+        items: [],
+        errors: ["В тексте кавычка без пары — скопируйте таблицу из Excel заново, не редактируя вставку"],
+      });
+    }
+    setPreview(rowsToLeads(table.rows, today));
   }
 
   async function runImport() {
@@ -187,7 +192,7 @@ export default function Crm() {
           <Card>
             <div className="mb-2 flex items-center justify-between">
               <h2 className="font-display text-base font-semibold">Сегодня</h2>
-              <span className="text-xs text-zinc-400">{todayList.length} дел</span>
+              <span className="text-xs text-zinc-400">{pluralDeals(todayList.length)}</span>
             </div>
             {todayList.length === 0 ? (
               <p className="py-2 text-sm text-zinc-500">
@@ -331,8 +336,9 @@ export default function Crm() {
         <div className="space-y-3">
           <p className="text-sm text-zinc-400">
             Откройте <span className="text-zinc-200">компании.xlsx</span>, выделите таблицу вместе с заголовками,
-            скопируйте и вставьте сюда. Дубли по сайту или названию пропускаются. Первые письма
-            распределятся по 5 в рабочий день, сначала приоритет 1.
+            скопируйте и вставьте сюда. Компании, которые уже есть в базе (совпал сайт или
+            название), пропускаются. Первые письма распределятся не больше 5 в рабочий день с
+            учётом уже запланированных, сначала приоритет 1.
           </p>
           <textarea
             value={importText}

@@ -2,16 +2,23 @@
 // (точка с запятой / запятая). Колонки узнаются по заголовкам компании.xlsx.
 // Чистые функции, покрыты leadImport.test.ts.
 
-import { addWorkdays, STAGES } from "./crm";
+import { addWorkdays, defaultNextStep, STAGES } from "./crm";
 import type { LeadStage, NewLead, NewLeadTouch } from "./types";
 
 export type ImportedLead = {
   lead: NewLead;
   touches: Omit<NewLeadTouch, "lead_id">[];
+  /** Дата последнего известного события — для отчёта «за месяц» вместо момента импорта. */
+  stageChangedOn: string;
 };
 
-/** Разбор таблицы с учётом кавычек: в ячейке могут быть переносы строк и разделитель. */
-export function parseTable(text: string): string[][] {
+export const FIRST_EMAIL_STEP = "Отправить первое письмо";
+
+/**
+ * Разбор таблицы с учётом кавычек: в ячейке могут быть переносы строк и разделитель.
+ * unclosedQuote — кавычка без пары: остаток вставки слился бы в одну ячейку.
+ */
+export function parseTable(text: string): { rows: string[][]; unclosedQuote: boolean } {
   const src = text.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
   const firstLine = src.split("\n", 1)[0] ?? "";
   const delim = firstLine.includes("\t") ? "\t" : firstLine.includes(";") ? ";" : ",";
@@ -47,7 +54,7 @@ export function parseTable(text: string): string[][] {
   }
   row.push(cell);
   rows.push(row);
-  return rows.filter((r) => r.some((c) => c.trim() !== ""));
+  return { rows: rows.filter((r) => r.some((c) => c.trim() !== "")), unclosedQuote: quoted };
 }
 
 type Field =
@@ -108,28 +115,37 @@ const STATUS_BY_LABEL: Record<string, LeadStage> = {
   "отказ": "lost",
 };
 
-/** «15.09.2026», «15.09.26» или «2026-09-15» → ISO. Иначе null. */
+/** «15.09.2026», «15.09.26» или «2026-09-15» → ISO. Несуществующая дата или другой формат → null. */
 export function parseDate(raw: string): string | null {
   const s = raw.trim();
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  let y: number, m: number, d: number;
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})$/);
-  if (!ru) return null;
-  const year = ru[3].length === 2 ? `20${ru[3]}` : ru[3];
-  return `${year}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
+  if (iso) {
+    [y, m, d] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+  } else if (ru) {
+    [y, m, d] = [Number(ru[3].length === 2 ? `20${ru[3]}` : ru[3]), Number(ru[2]), Number(ru[1])];
+  } else {
+    return null;
+  }
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-/** Ключ для поиска дублей: домен сайта, а без сайта — название без ООО и кавычек. */
-export function leadKey(l: { company: string; website: string | null }): string {
-  if (l.website?.trim()) {
-    const host = l.website
-      .trim()
-      .toLowerCase()
-      .replace(/^[a-z]+:\/\//, "")
-      .replace(/^www\./, "")
-      .split(/[/?#]/)[0];
-    if (host) return `site:${host}`;
-  }
+/**
+ * Ключи для поиска дублей: домен сайта и название без ООО и кавычек.
+ * Дубль — если совпал любой ключ: «Альфа» без сайта = «ООО Альфа» с alfa.ru.
+ */
+export function leadKeys(l: { company: string; website: string | null }): string[] {
+  const keys: string[] = [];
+  const host = (l.website ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z]+:\/\//, "")
+    .replace(/^www\./, "")
+    .split(/[/?#]/)[0];
+  if (host) keys.push(`site:${host}`);
   const name = l.company
     .toLowerCase()
     .replace(/[«»"'.,]/g, " ")
@@ -137,14 +153,32 @@ export function leadKey(l: { company: string; website: string | null }): string 
     .replace(/(^|\s)(ооо|ип|ао|пао|зао)(?=\s|$)/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return `name:${name}`;
+  if (name) keys.push(`name:${name}`);
+  return keys;
+}
+
+/** Убирает дубли — и с базой, и внутри самой вставки. */
+export function dropDuplicates<T extends { lead: { company: string; website: string | null } }>(
+  items: T[],
+  existing: { company: string; website: string | null }[],
+): { fresh: T[]; skipped: number } {
+  const seen = new Set(existing.flatMap(leadKeys));
+  const fresh: T[] = [];
+  for (const item of items) {
+    const keys = leadKeys(item.lead);
+    if (keys.some((k) => seen.has(k))) continue;
+    keys.forEach((k) => seen.add(k));
+    fresh.push(item);
+  }
+  return { fresh, skipped: items.length - fresh.length };
 }
 
 const orNull = (v: string | undefined) => (v && v.trim() ? v.trim() : null);
 
 /**
  * Строки таблицы → лиды. Первая непустая строка — заголовки. Строки без названия
- * компании пропускаются с пояснением.
+ * компании пропускаются с пояснением. Следующий шаг ставится всем, кроме
+ * «Не писал» (им — scheduleFirstEmails) и отказов, иначе лид молча выпадет из «Сегодня».
  */
 export function rowsToLeads(rows: string[][], todayIso: string): { items: ImportedLead[]; errors: string[] } {
   const errors: string[] = [];
@@ -176,16 +210,32 @@ export function rowsToLeads(rows: string[][], todayIso: string): { items: Import
       else errors.push(`Строка ${line}: статус «${get("status")}» не знаю — поставил «Не писал»`);
     }
 
-    const priorityNum = Number.parseInt(get("priority"), 10);
-    const sent = parseDate(get("sent"));
-    const followup = parseDate(get("followup"));
+    const date = (f: Field, label: string) => {
+      const raw = get(f).trim();
+      if (!raw) return null;
+      const parsed = parseDate(raw);
+      if (!parsed) errors.push(`Строка ${line}: дата «${raw}» в колонке «${label}» не распознана — нужен ДД.ММ.ГГГГ`);
+      return parsed;
+    };
+    const sent = date("sent", "Отправлено");
+    const followup = date("followup", "Вдогонку");
+
     const touches: ImportedLead["touches"] = [];
     if (sent) touches.push({ type: "email", date: sent, comment: "Первое письмо (из таблицы)" });
     const notes = orNull(get("notes"));
     if (notes) touches.push({ type: "note", date: todayIso, comment: notes });
 
-    // Дата «Вдогонку» в таблице — план, а не факт: для «Отправлено» это следующий шаг
-    const nextStep = stage === "sent" && followup ? { text: "Письмо вдогонку", date: followup } : null;
+    let nextStep: { text: string; date: string } | null = null;
+    if (stage === "sent") {
+      // Дата «Вдогонку» в таблице — план, а не факт. Нет её — считаем от даты письма
+      nextStep = { text: "Письмо вдогонку", date: followup ?? addWorkdays(sent ?? todayIso, 4) };
+    } else if (stage !== "new" && stage !== "lost") {
+      nextStep = defaultNextStep(stage, todayIso);
+    }
+
+    // Письмо уходило — лид дошёл до «Отправлено», даже если потом отказ
+    const reached: NewLead["reached_stage"] = stage === "lost" ? (sent ? "sent" : "new") : stage;
+    const priorityNum = Number.parseInt(get("priority"), 10);
 
     items.push({
       lead: {
@@ -205,7 +255,7 @@ export function rowsToLeads(rows: string[][], todayIso: string): { items: Import
         priority: priorityNum === 1 || priorityNum === 2 ? priorityNum : null,
         source: orNull(get("source")) ?? "Холодное письмо",
         stage,
-        reached_stage: stage === "lost" ? "new" : stage,
+        reached_stage: reached,
         lost_reason: null,
         next_step: nextStep?.text ?? null,
         next_step_date: nextStep?.date ?? null,
@@ -213,6 +263,7 @@ export function rowsToLeads(rows: string[][], todayIso: string): { items: Import
         client_id: null,
       },
       touches,
+      stageChangedOn: [sent, followup].filter((d): d is string => !!d && d <= todayIso).sort().pop() ?? todayIso,
     });
   });
   return { items, errors };
@@ -226,21 +277,29 @@ function firstWorkday(iso: string): string {
 }
 
 /**
- * «Не писал» без даты → «Отправить первое письмо», по perDay в рабочий день,
- * сначала приоритет 1. Норматив из скриптов — 4–5 писем в день, так «Сегодня»
- * не превращается в список из всей базы.
+ * «Не писал» без даты → «Отправить первое письмо», не больше perDay в рабочий день,
+ * сначала приоритет 1. booked — сколько первых писем уже стоит на каждую дату в базе.
+ * Норматив из скриптов — 4–5 писем в день, так «Сегодня» не превращается в список
+ * из всей базы. Вызывать после удаления дублей.
  */
-export function scheduleFirstEmails(items: ImportedLead[], todayIso: string, perDay = 5): ImportedLead[] {
+export function scheduleFirstEmails<T extends ImportedLead>(
+  items: T[],
+  todayIso: string,
+  booked: Record<string, number> = {},
+  perDay = 5,
+): T[] {
   const queue = items
     .map((item, order) => ({ item, order }))
     .filter(({ item }) => item.lead.stage === "new" && !item.lead.next_step_date)
     .sort((a, b) => (a.item.lead.priority ?? 9) - (b.item.lead.priority ?? 9) || a.order - b.order);
 
+  const load = { ...booked };
   let day = firstWorkday(todayIso);
-  queue.forEach(({ item }, i) => {
-    if (i > 0 && i % perDay === 0) day = addWorkdays(day, 1);
-    item.lead.next_step = "Отправить первое письмо";
+  for (const { item } of queue) {
+    while ((load[day] ?? 0) >= perDay) day = addWorkdays(day, 1);
+    load[day] = (load[day] ?? 0) + 1;
+    item.lead.next_step = FIRST_EMAIL_STEP;
     item.lead.next_step_date = day;
-  });
+  }
   return items;
 }

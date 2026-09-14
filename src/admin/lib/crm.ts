@@ -122,6 +122,13 @@ export function nextReachedStage(
   return stageIndex(to) > stageIndex(reached) ? to : reached;
 }
 
+/** Шаг и дата задаются парой: шаг без даты не всплывёт в «Сегодня», дата без шага — пустое дело. */
+export function nextStepError(text: string, date: string): string | null {
+  if (text.trim() && !date) return "Укажите дату следующего шага";
+  if (!text.trim() && date) return "Напишите, что сделать, или очистите дату";
+  return null;
+}
+
 export type StageChange = {
   stage: LeadStage;
   reached_stage: Exclude<LeadStage, "lost">;
@@ -141,9 +148,8 @@ export function buildStageChange(
   }
   const nextStep = opts.nextStep?.trim() || null;
   const nextStepDate = opts.nextStepDate || null;
-  if (nextStep && !nextStepDate) {
-    return { patch: null, error: "Укажите дату следующего шага" };
-  }
+  const stepError = nextStepError(nextStep ?? "", nextStepDate ?? "");
+  if (stepError) return { patch: null, error: stepError };
   return {
     patch: {
       stage: to,
@@ -214,24 +220,24 @@ export type FunnelRow = {
 
 /**
  * Конверсии по этапам. Лид «дошёл» до этапа, если его reached_stage не раньше.
- * Воронка начинается с «Отправлено»: «не писал» — ещё не контакт.
- * «Вдогонку» пропускается при подсчёте «от предыдущего»: ответить можно и на
- * первое письмо, и тогда вдогонку не будет.
+ * Воронка начинается с «Отправлено»: «не писал» — ещё не контакт. «Вдогонку»
+ * не показывается: по reached_stage в неё попадают и ответившие на первое
+ * письмо, и входящие, число вводило бы в заблуждение.
  */
 export function funnel(leads: Pick<Lead, "reached_stage">[]): FunnelRow[] {
   const rows: FunnelRow[] = [];
   let prev: number | null = null;
   for (const s of STAGES) {
-    if (s.id === "new") continue;
+    if (s.id === "new" || s.id === "followup") continue;
     const idx = stageIndex(s.id);
     const reached = leads.filter((l) => stageIndex(l.reached_stage) >= idx).length;
     rows.push({
       stage: s.id,
       label: s.label,
       reached,
-      fromPrev: s.id === "followup" || prev === null || prev === 0 ? null : Math.round((reached / prev) * 100),
+      fromPrev: prev === null || prev === 0 ? null : Math.round((reached / prev) * 100),
     });
-    if (s.id !== "followup") prev = reached;
+    prev = reached;
   }
   return rows;
 }
@@ -260,7 +266,23 @@ export function lostReasons(leads: Pick<Lead, "stage" | "lost_reason">[]): {
       share: Math.round((count / total) * 100),
     }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  const top = rows[0];
+  // «Без причины» — не сигнал: это пробел в записях, а не причина
+  const top = rows.find((r) => r.reason !== null);
   const signal = total >= 3 && top && top.count * 3 > total ? top : null;
   return { rows, total, signal };
+}
+
+/** «1 дело», «3 дела», «5 дел». */
+export function pluralDeals(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${n} дело`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} дела`;
+  return `${n} дел`;
+}
+
+/** Месяц (YYYY-MM) метки времени в локальном поясе, а не в UTC. */
+export function localMonth(timestamp: string): string {
+  const d = new Date(timestamp);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 }
