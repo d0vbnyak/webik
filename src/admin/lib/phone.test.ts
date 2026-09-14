@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizePhone, whatsappLink, telegramLink, maxLinkOf, messengerLinks } from "./phone";
+import { normalizePhone, callLink, telegramLink, maxLinkOf, messengerLinks } from "./phone";
 
 describe("normalizePhone", () => {
   it("убирает всё кроме цифр", () => {
@@ -14,12 +14,12 @@ describe("normalizePhone", () => {
   });
 });
 
-describe("whatsappLink", () => {
+describe("callLink", () => {
   it("по нормализованному номеру", () => {
-    expect(whatsappLink("89001234567")).toBe("https://wa.me/79001234567");
+    expect(callLink("8 (900) 123-45-67")).toBe("tel:+79001234567");
   });
   it("нет телефона → null", () => {
-    expect(whatsappLink("")).toBeNull();
+    expect(callLink("")).toBeNull();
   });
 });
 
@@ -51,13 +51,13 @@ describe("maxLinkOf", () => {
 describe("messengerLinks (видимость по правилам)", () => {
   it("только max_link → виден только MAX", () => {
     const r = messengerLinks({ phone: null, telegram_username: null, max_link: "https://max.ru/u/abc" });
-    expect(r.whatsapp).toBeNull();
+    expect(r.call).toBeNull();
     expect(r.telegram).toBeNull();
     expect(r.max).toBe("https://max.ru/u/abc");
   });
-  it("есть телефон → WhatsApp и Telegram(по телефону) видны, MAX нет", () => {
+  it("есть телефон → звонок и Telegram(по телефону) видны, MAX нет", () => {
     const r = messengerLinks({ phone: "89001234567", telegram_username: null, max_link: null });
-    expect(r.whatsapp).toBe("https://wa.me/79001234567");
+    expect(r.call).toBe("tel:+79001234567");
     expect(r.telegram).toBe("tg://resolve?phone=79001234567");
     expect(r.max).toBeNull();
   });

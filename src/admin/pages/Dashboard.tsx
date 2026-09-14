@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { usePeriod } from "../context/PeriodContext";
 import { useIncomes } from "../hooks/useIncomes";
 import { useExpenses } from "../hooks/useExpenses";
@@ -5,6 +6,8 @@ import { useReceivables } from "../hooks/useReceivables";
 import { useSettings } from "../hooks/useSettings";
 import { useGoals } from "../hooks/useGoals";
 import { useRecurring } from "../hooks/useRecurring";
+import { useLeads } from "../hooks/useLeads";
+import { dueToday } from "../lib/crm";
 import { formatMoney, formatDate, monthLabel, todayISO } from "../lib/dates";
 import { remainingToPay, isOverdue, taxReserve } from "../lib/finance";
 import { shouldRemind, daysUntil } from "../lib/recurring";
@@ -23,6 +26,7 @@ export default function Dashboard() {
   const { settings } = useSettings();
   const { getGoal } = useGoals();
   const { recurring } = useRecurring();
+  const leadsHook = useLeads();
 
   const loading = incomesHook.loading || expensesHook.loading;
 
@@ -43,6 +47,8 @@ export default function Dashboard() {
     .slice(0, 6);
 
   const reminders = recurring.filter((r) => shouldRemind(r, today));
+  const crmToday = dueToday(leadsHook.leads, today);
+  const crmOverdue = crmToday.filter((l) => (l.next_step_date ?? "") < today).length;
 
   return (
     <div>
@@ -65,6 +71,26 @@ export default function Dashboard() {
             <StatCard label="Прибыль" amount={profit} tone={profit >= 0 ? "text-brand-green" : "text-red-400"} />
             <StatCard label={`На налог (${taxRate}%)`} amount={tax} hint="отложить с полученного" />
           </div>
+
+          <Link to="/admin/crm" className="block">
+            <Card className="transition hover:border-zinc-600">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-display text-base font-semibold">Воронка на сегодня</h2>
+                  <p className="mt-0.5 text-sm text-zinc-400">
+                    {leadsHook.loading
+                      ? "…"
+                      : crmToday.length === 0
+                        ? "Дел по лидам нет"
+                        : `${crmToday.length} дел` + (crmOverdue ? ` · ${crmOverdue} просрочено` : "")}
+                  </p>
+                </div>
+                <span className={`font-display text-2xl font-semibold ${crmOverdue ? "text-red-400" : "text-brand-green"}`}>
+                  {leadsHook.loading ? "" : crmToday.length}
+                </span>
+              </div>
+            </Card>
+          </Link>
 
           <Card>
             <h2 className="mb-3 font-display text-base font-semibold">Цель по доходу</h2>

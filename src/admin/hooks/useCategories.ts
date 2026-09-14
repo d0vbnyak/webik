@@ -7,9 +7,10 @@ const DEFAULTS: { type: CategoryType; name: string }[] = [
   { type: "expense", name: "ИИ" },
   { type: "expense", name: "Сервисы и подписки" },
   { type: "expense", name: "Прочее" },
-  { type: "income", name: "Веб" },
+  { type: "income", name: "Лендинги" },
   { type: "income", name: "Боты" },
-  { type: "income", name: "SEO" },
+  { type: "income", name: "Агенты" },
+  { type: "income", name: "Сопровождение" },
 ];
 
 /**

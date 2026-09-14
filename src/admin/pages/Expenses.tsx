@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { usePeriod } from "../context/PeriodContext";
 import { useExpenses } from "../hooks/useExpenses";
 import { useCategories } from "../hooks/useCategories";
@@ -68,7 +69,12 @@ export default function Expenses() {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-semibold tracking-tight">Расходы</h1>
-        <MonthSwitcher />
+        <div className="flex items-center gap-2">
+          <Link to="/admin/recurring" className={btnGhost}>
+            Повторяющиеся
+          </Link>
+          <MonthSwitcher />
+        </div>
       </div>
 
       <div className="mb-4 flex items-center justify-between">

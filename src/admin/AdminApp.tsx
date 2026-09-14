@@ -11,6 +11,9 @@ import Recurring from "./pages/Recurring";
 import Clients from "./pages/Clients";
 import Stats from "./pages/Stats";
 import Settings from "./pages/Settings";
+import Crm from "./pages/Crm";
+import LeadCard from "./pages/LeadCard";
+import CrmReport from "./pages/CrmReport";
 
 /**
  * Закрытая админ-панель. Монтируется в App на /admin/* в обход публичного
@@ -33,6 +36,9 @@ export default function AdminApp() {
             <Route path="incomes" element={<Incomes />} />
             <Route path="expenses" element={<Expenses />} />
             <Route path="recurring" element={<Recurring />} />
+            <Route path="crm" element={<Crm />} />
+            <Route path="crm/report" element={<CrmReport />} />
+            <Route path="crm/:id" element={<LeadCard />} />
             <Route path="clients" element={<Clients />} />
             <Route path="stats" element={<Stats />} />
             <Route path="settings" element={<Settings />} />

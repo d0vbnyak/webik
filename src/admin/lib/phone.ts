@@ -9,10 +9,13 @@ export function normalizePhone(raw: string | null | undefined): string {
   return digits;
 }
 
-/** WhatsApp — только при наличии телефона. */
-export function whatsappLink(rawPhone: string | null | undefined): string | null {
+/**
+ * Звонок — только при наличии телефона. WhatsApp убран: в РФ заблокирован
+ * с февраля 2026.
+ */
+export function callLink(rawPhone: string | null | undefined): string | null {
   const n = normalizePhone(rawPhone);
-  return n ? `https://wa.me/${n}` : null;
+  return n ? `tel:+${n}` : null;
 }
 
 /** Telegram: по username (приоритет, без @); иначе по телефону (tg://resolve). */
@@ -37,9 +40,9 @@ export function messengerLinks(c: {
   phone: string | null;
   telegram_username: string | null;
   max_link: string | null;
-}): { whatsapp: string | null; telegram: string | null; max: string | null } {
+}): { call: string | null; telegram: string | null; max: string | null } {
   return {
-    whatsapp: whatsappLink(c.phone),
+    call: callLink(c.phone),
     telegram: telegramLink(c.telegram_username, c.phone),
     max: maxLinkOf(c.max_link),
   };

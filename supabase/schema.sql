@@ -1,6 +1,8 @@
 -- ============================================================================
 -- WebIK · Админ-панель «Статистика» — схема Supabase (Postgres)
--- Выполнить ОДИН РАЗ в Supabase → SQL Editor (New query → вставить → Run).
+-- Выполнить в Supabase → SQL Editor (New query → вставить → Run).
+-- Скрипт идемпотентный: после обновления схемы (например, CRM) прогнать целиком
+-- ещё раз — существующие таблицы и данные не трогаются, новые создаются.
 --
 -- Безопасность: anon-ключ виден во фронтенде, поэтому защиту обеспечивает RLS.
 -- На каждой таблице включён RLS; user_id по умолчанию = auth.uid(); политики
@@ -93,12 +95,59 @@ create table if not exists public.settings (
   unique (user_id)
 );
 
+-- CRM: лиды воронки продаж (добавлено 14.09.2026).
+-- Этапы и коды отказов — src/admin/lib/crm.ts, там же правила переходов.
+create table if not exists public.leads (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  company           text not null,
+  inn               text,
+  city              text,
+  website           text,
+  email             text,
+  phone             text,
+  contact_name      text,
+  telegram_username text,
+  other_channels    text,
+  business          text,
+  hook              text,
+  variant           text,
+  first_line        text,
+  priority          int check (priority in (1, 2)),
+  source            text,
+  stage             text not null default 'new' check (stage in
+                      ('new','sent','followup','replied','check','call','proposal','pilot','client','support','lost')),
+  reached_stage     text not null default 'new' check (reached_stage in
+                      ('new','sent','followup','replied','check','call','proposal','pilot','client','support')),
+  lost_reason       text check (lost_reason in
+                      ('not_fit','private','not_sold','volume','price','timing','decision_maker','trust','data','competitor','ghosted','no_reply')),
+  next_step         text,
+  next_step_date    date,
+  deal_amount       numeric(14,2) check (deal_amount >= 0),
+  client_id         uuid references public.clients (id) on delete set null,
+  stage_changed_at  timestamptz not null default now(),
+  created_at        timestamptz not null default now()
+);
+
+-- CRM: история касаний по лиду (письма, звонки, созвоны, КП, смены этапа)
+create table if not exists public.lead_touches (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  lead_id     uuid not null references public.leads (id) on delete cascade,
+  type        text not null check (type in ('email','followup','call','meeting','message','proposal','note','stage')),
+  date        date not null,
+  comment     text,
+  created_at  timestamptz not null default now()
+);
+
 -- Индексы под частые выборки по периоду/пользователю
 create index if not exists expenses_user_date_idx        on public.expenses (user_id, date);
 create index if not exists incomes_user_date_idx         on public.incomes (user_id, date);
 create index if not exists incomes_status_idx            on public.incomes (user_id, payment_status);
 create index if not exists expenses_recurring_idx        on public.expenses (recurring_id);
 create index if not exists recurring_user_active_idx     on public.recurring_expenses (user_id, active);
+create index if not exists leads_user_next_step_idx      on public.leads (user_id, next_step_date);
+create index if not exists lead_touches_lead_idx         on public.lead_touches (lead_id, date);
 
 -- ----------------------------------------------------------------------------
 -- Row Level Security: включаем на всех таблицах
@@ -110,6 +159,8 @@ alter table public.incomes            enable row level security;
 alter table public.categories         enable row level security;
 alter table public.goals              enable row level security;
 alter table public.settings           enable row level security;
+alter table public.leads              enable row level security;
+alter table public.lead_touches       enable row level security;
 
 -- ----------------------------------------------------------------------------
 -- Политики: доступ только к своим строкам (user_id = auth.uid())
@@ -120,7 +171,8 @@ declare
   t text;
 begin
   foreach t in array array[
-    'clients','recurring_expenses','expenses','incomes','categories','goals','settings'
+    'clients','recurring_expenses','expenses','incomes','categories','goals','settings',
+    'leads','lead_touches'
   ]
   loop
     execute format('drop policy if exists "own_select" on public.%I;', t);

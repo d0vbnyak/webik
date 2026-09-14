@@ -11,17 +11,10 @@ export default function MessengerButtons({ phone, telegram_username, max_link }:
 
   return (
     <div className="flex items-center gap-2">
-      {links.whatsapp && (
-        <a
-          href={links.whatsapp}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="WhatsApp"
-          title="WhatsApp"
-          className={`${iconBtn} hover:text-green-400`}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.2 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.5-3.9-4.7-4.1-.1-.2-1-1.4-1-2.6s.6-1.8.9-2.1c.2-.2.4-.3.6-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2.1.3 0 .5l-.4.6c-.2.2-.3.4-.1.7.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.2.1.4.1.6-.1l.7-.9c.2-.2.3-.2.6-.1l1.9.9c.3.1.4.2.5.3 0 .2 0 .8-.2 1.3Z" />
+      {links.call && (
+        <a href={links.call} aria-label="Позвонить" title="Позвонить" className={`${iconBtn} hover:text-brand-green`}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z" />
           </svg>
         </a>
       )}
@@ -51,7 +44,7 @@ export default function MessengerButtons({ phone, telegram_username, max_link }:
           MAX
         </a>
       )}
-      {!links.whatsapp && !links.telegram && !links.max && (
+      {!links.call && !links.telegram && !links.max && (
         <span className="text-xs text-zinc-600">нет контактов</span>
       )}
     </div>
