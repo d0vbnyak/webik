@@ -47,16 +47,16 @@ export function useLeads() {
    * Касания из таблицы пишутся следом.
    */
   const importMany = useCallback(
-    async (items: ImportedLead[]): Promise<{ added: number; skipped: number; error: string | null }> => {
+    async (items: ImportedLead[]): Promise<{ added: number; skippedNames: string[]; error: string | null }> => {
       const { data: existing, error: selErr } = await supabase
         .from("leads")
         .select("company, website, next_step, next_step_date");
-      if (selErr) return { added: 0, skipped: 0, error: selErr.message };
+      if (selErr) return { added: 0, skippedNames: [], error: selErr.message };
       const rows = (existing ?? []) as Pick<Lead, "company" | "website" | "next_step" | "next_step_date">[];
 
       const today = todayISO();
-      const { fresh, skipped } = dropDuplicates(items, rows);
-      if (fresh.length === 0) return { added: 0, skipped, error: null };
+      const { fresh, skippedNames } = dropDuplicates(items, rows);
+      if (fresh.length === 0) return { added: 0, skippedNames, error: null };
 
       const booked: Record<string, number> = {};
       for (const r of rows) {
@@ -71,24 +71,21 @@ export function useLeads() {
         booked,
       );
 
-      const { data: inserted, error: insErr } = await supabase
+      // id генерируем сами: касания привязываются к нему, а не к порядку ответа базы
+      const withIds = planned.map((i) => ({ ...i, id: crypto.randomUUID() }));
+      const { error: insErr } = await supabase
         .from("leads")
-        .insert(planned.map((i) => ({ ...i.lead, stage_changed_at: `${i.stageChangedOn}T12:00:00` })))
-        .select("id");
-      if (insErr) return { added: 0, skipped, error: insErr.message };
+        .insert(withIds.map((i) => ({ ...i.lead, id: i.id, stage_changed_at: `${i.stageChangedOn}T12:00:00` })));
+      if (insErr) return { added: 0, skippedNames, error: insErr.message };
 
-      // PostgREST возвращает строки в порядке вставки
-      const ids = ((inserted ?? []) as { id: string }[]).map((r) => r.id);
-      const touches = planned.flatMap((item, i) =>
-        ids[i] ? item.touches.map((t) => ({ ...t, lead_id: ids[i] })) : [],
-      );
+      const touches = withIds.flatMap((item) => item.touches.map((t) => ({ ...t, lead_id: item.id })));
       let touchError: string | null = null;
       if (touches.length > 0) {
         const { error: tErr } = await supabase.from("lead_touches").insert(touches);
         if (tErr) touchError = `Лиды добавлены, но история касаний из таблицы не записалась: ${tErr.message}`;
       }
       await load();
-      return { added: planned.length, skipped, error: touchError };
+      return { added: planned.length, skippedNames, error: touchError };
     },
     [load],
   );

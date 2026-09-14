@@ -152,8 +152,12 @@ export default function Crm() {
     if (res.error && res.added === 0) return setImportResult(`Ошибка: ${res.error}`);
     setPreview(null);
     setImportText("");
+    const skipped = res.skippedNames;
     setImportResult(
-      `Добавлено: ${res.added}. Уже были в базе: ${res.skipped}.` + (res.error ? ` ${res.error}` : ""),
+      `Добавлено: ${res.added}. Уже были в базе: ${skipped.length}` +
+        (skipped.length ? ` (${skipped.slice(0, 10).join(", ")}${skipped.length > 10 ? "…" : ""})` : "") +
+        "." +
+        (res.error ? ` ${res.error}` : ""),
     );
   }
 

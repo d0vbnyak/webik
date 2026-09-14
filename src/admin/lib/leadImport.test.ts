@@ -128,21 +128,26 @@ describe("dropDuplicates", () => {
 
   it("один сайт в разном написании — дубль", () => {
     const r = dropDuplicates([item("Другое имя", "bastion66.ru")], [{ company: "Бастион", website: "https://www.bastion66.ru/" }]);
-    expect(r).toEqual({ fresh: [], skipped: 1 });
+    expect(r).toEqual({ fresh: [], skippedNames: ["Другое имя"] });
   });
   it("совпало название, а сайта нет у одной из сторон — дубль", () => {
-    const r = dropDuplicates([item("Альфа", null)], [{ company: "ООО «Альфа»", website: "alfa.ru" }]);
-    expect(r.skipped).toBe(1);
+    expect(dropDuplicates([item("Альфа", null)], [{ company: "ООО «Альфа»", website: "alfa.ru" }]).skippedNames).toEqual(["Альфа"]);
+    expect(dropDuplicates([item("ООО Альфа", "alfa.ru")], [{ company: "Альфа", website: null }]).skippedNames).toEqual(["ООО Альфа"]);
+  });
+  it("одно название, разные сайты — разные компании", () => {
+    const r = dropDuplicates([item("ООО Щит", "shit-kzn.ru")], [{ company: "Щит", website: "shit66.ru" }]);
+    expect(r.fresh).toHaveLength(1);
+    expect(r.skippedNames).toEqual([]);
   });
   it("дубли внутри самой вставки, разные компании проходят", () => {
     const r = dropDuplicates([item("Альфа", "alfa.ru"), item("ООО Альфа", null), item("Бета", "beta.ru")], []);
     expect(r.fresh.map((x) => x.lead.company)).toEqual(["Альфа", "Бета"]);
   });
   it("ключи: домен и название без ООО", () => {
-    expect(leadKeys({ company: "ООО «Бастион»", website: "https://www.bastion66.ru/x" })).toEqual([
-      "site:bastion66.ru",
-      "name:бастион",
-    ]);
+    expect(leadKeys({ company: "ООО «Бастион»", website: "https://www.bastion66.ru/x" })).toEqual({
+      site: "bastion66.ru",
+      name: "бастион",
+    });
   });
 });
 

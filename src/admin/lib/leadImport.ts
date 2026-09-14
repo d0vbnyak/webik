@@ -133,19 +133,14 @@ export function parseDate(raw: string): string | null {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-/**
- * Ключи для поиска дублей: домен сайта и название без ООО и кавычек.
- * Дубль — если совпал любой ключ: «Альфа» без сайта = «ООО Альфа» с alfa.ru.
- */
-export function leadKeys(l: { company: string; website: string | null }): string[] {
-  const keys: string[] = [];
-  const host = (l.website ?? "")
+/** Ключи для поиска дублей: домен сайта (или "") и название без ООО и кавычек. */
+export function leadKeys(l: { company: string; website: string | null }): { site: string; name: string } {
+  const site = (l.website ?? "")
     .trim()
     .toLowerCase()
     .replace(/^[a-z]+:\/\//, "")
     .replace(/^www\./, "")
     .split(/[/?#]/)[0];
-  if (host) keys.push(`site:${host}`);
   const name = l.company
     .toLowerCase()
     .replace(/[«»"'.,]/g, " ")
@@ -153,24 +148,45 @@ export function leadKeys(l: { company: string; website: string | null }): string
     .replace(/(^|\s)(ооо|ип|ао|пао|зао)(?=\s|$)/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  if (name) keys.push(`name:${name}`);
-  return keys;
+  return { site, name };
 }
 
-/** Убирает дубли — и с базой, и внутри самой вставки. */
+/**
+ * Убирает дубли — и с базой, и внутри самой вставки. Совпал сайт — дубль.
+ * Совпало название — дубль, только если хотя бы у одной стороны нет сайта:
+ * «Щит» из Екатеринбурга и «Щит» из Казани с разными сайтами — разные компании.
+ */
 export function dropDuplicates<T extends { lead: { company: string; website: string | null } }>(
   items: T[],
   existing: { company: string; website: string | null }[],
-): { fresh: T[]; skipped: number } {
-  const seen = new Set(existing.flatMap(leadKeys));
+): { fresh: T[]; skippedNames: string[] } {
+  const sites = new Set<string>();
+  const names = new Set<string>(); // все известные названия
+  const namesWithoutSite = new Set<string>(); // названия, у которых нет сайта
+  const remember = (k: { site: string; name: string }) => {
+    if (k.site) sites.add(k.site);
+    if (k.name) {
+      names.add(k.name);
+      if (!k.site) namesWithoutSite.add(k.name);
+    }
+  };
+  existing.forEach((l) => remember(leadKeys(l)));
+
   const fresh: T[] = [];
+  const skippedNames: string[] = [];
   for (const item of items) {
-    const keys = leadKeys(item.lead);
-    if (keys.some((k) => seen.has(k))) continue;
-    keys.forEach((k) => seen.add(k));
+    const k = leadKeys(item.lead);
+    const dup = k.site
+      ? sites.has(k.site) || (!!k.name && namesWithoutSite.has(k.name))
+      : !!k.name && names.has(k.name);
+    if (dup) {
+      skippedNames.push(item.lead.company);
+      continue;
+    }
+    remember(k);
     fresh.push(item);
   }
-  return { fresh, skipped: items.length - fresh.length };
+  return { fresh, skippedNames };
 }
 
 const orNull = (v: string | undefined) => (v && v.trim() ? v.trim() : null);
