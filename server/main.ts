@@ -70,6 +70,11 @@ root.get("/healthz", async (c) => {
   return c.text("ok");
 });
 
+// Чат в проде выключен (см. шапку файла). Понятный ответ виджету вместо «Запрос отклонён»
+root.post("/api/chat", (c) =>
+  c.json({ error: "Бот временно отдыхает. Напишите нам через кнопку «Связаться» — ответим сами." }, 503),
+);
+
 root.route("/", createApp({ db, secureCookies, clientIp: (c) => clientIp(c, isTrustedProxy) }));
 
 // Статика сборки; остальные пути — index.html (маршрутизация на клиенте)
