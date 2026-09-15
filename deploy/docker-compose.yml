@@ -7,8 +7,10 @@
 # никого нет: сервисы второго бизнеса не видят ни API, ни трафик от Caddy к нему.
 # Сеть webik_edge создаётся один раз вне обоих compose-проектов
 # (docker network create --internal webik_edge): так ни `down` у WebIK, ни порядок
-# запуска не уронят Caddy второго бизнеса. --internal — у приложения нет выхода
-# в интернет, ему он не нужен.
+# запуска не уронят Caddy второго бизнеса. --internal — через эту сеть наружу не выйти.
+#
+# Выход в интернет у приложения один — сеть egress, ради писем о заявках (SMTP).
+# Он не ограничен одним адресом; база в эту сеть не входит.
 #
 # Запуск на сервере (из /opt/webik):  docker compose up -d --build
 # Секреты — в /opt/webik/.env (права 600), см. deploy/README.md.
@@ -60,8 +62,15 @@ services:
       PORT: "8080"
       # Только от этого контейнера X-Forwarded-For считается адресом клиента
       TRUSTED_PROXY_HOST: sakhuslugi-caddy-1
+      # Письма о заявках. Включаются, когда в .env задан SMTP_PASS (пароль приложения)
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-dev.d0vbnyak@gmail.com}
+      SMTP_PASS: ${SMTP_PASS:-}
+      ORDER_EMAIL_TO: ${ORDER_EMAIL_TO:-dev.d0vbnyak@gmail.com}
     networks:
       internal: {}
+      egress: {}
       edge:
         aliases: [webik-app]
     mem_limit: 256m
@@ -80,6 +89,7 @@ volumes:
 networks:
   internal:
     internal: true
+  egress: {}
   edge:
     name: webik_edge
     external: true

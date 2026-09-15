@@ -5,6 +5,9 @@
  * бота с текстами ошибок чата (server/). Поменял контакт — поменял здесь.
  */
 
+/** Адрес сайта — для ссылок в уведомлениях о заявках. */
+export const SITE_URL = "https://webik.tech";
+
 export const CONTACT_EMAIL = "dev.d0vbnyak@gmail.com";
 
 export const TELEGRAM_USERNAME = "d0vbnyak";

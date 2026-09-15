@@ -1,5 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-import { ORDER_RATE, OrderLimiter, splitContact, submitOrder, telegramNotifierFromEnv } from "./orders";
+import {
+  ORDER_RATE,
+  OrderLimiter,
+  emailNotifierFromEnv,
+  notifiersFromEnv,
+  orderSubject,
+  splitContact,
+  submitOrder,
+  telegramNotifierFromEnv,
+  type MailMessage,
+  type OrderNotice,
+} from "./orders";
 import type { Order } from "../shared/order";
 
 const ORDER: Order = { name: "Иван", contact: "@ivan", task: "бот поддержки", details: "" };
@@ -18,7 +29,7 @@ describe("telegramNotifierFromEnv", () => {
   it("шлёт sendMessage без разметки", async () => {
     const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
     const notify = telegramNotifierFromEnv({ TELEGRAM_BOT_TOKEN: "123:abc", TELEGRAM_CHAT_ID: "42" }, fetchMock);
-    await notify!("<b>текст</b>");
+    await notify!({ order: ORDER, source: "form", text: "<b>текст</b>", leadId: null });
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://api.telegram.org/bot123:abc/sendMessage");
     const body = JSON.parse(init.body as string);
@@ -29,10 +40,54 @@ describe("telegramNotifierFromEnv", () => {
   it("ответ не 2xx — ошибка без токена в тексте", async () => {
     const fetchMock = vi.fn(async () => new Response('{"description":"chat not found"}', { status: 400 }));
     const notify = telegramNotifierFromEnv({ TELEGRAM_BOT_TOKEN: "123:secret", TELEGRAM_CHAT_ID: "1" }, fetchMock);
-    const error = await notify!("x").catch((e: Error) => e);
+    const error = await notify!({ order: ORDER, source: "form", text: "x", leadId: null }).catch((e: Error) => e);
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toContain("chat not found");
     expect((error as Error).message).not.toContain("secret");
+  });
+});
+
+describe("почта", () => {
+  const notice = (over: Partial<OrderNotice> = {}): OrderNotice => ({
+    order: { name: "Иван", contact: "ivan@mail.ru", task: "бот", details: "" },
+    source: "form",
+    text: "Новая заявка с сайта WebIK",
+    leadId: "lead-1",
+    ...over,
+  });
+
+  it("без SMTP_PASS выключена", () => {
+    expect(emailNotifierFromEnv({ SMTP_USER: "a@b.ru" })).toBeNull();
+    expect(notifiersFromEnv({})).toBeNull();
+  });
+
+  it("письмо: отправитель, адресат по умолчанию, ответ клиенту, ссылка на карточку", async () => {
+    const sent: MailMessage[] = [];
+    const notify = emailNotifierFromEnv({ SMTP_PASS: "app-pass" }, async (m) => void sent.push(m));
+    await notify!(notice());
+    expect(sent).toEqual([
+      {
+        from: '"Сайт WebIK" <dev.d0vbnyak@gmail.com>',
+        to: "dev.d0vbnyak@gmail.com",
+        replyTo: "ivan@mail.ru",
+        subject: "Заявка с сайта WebIK — Иван",
+        text: "Новая заявка с сайта WebIK\n\nКарточка в CRM: https://webik.tech/admin/crm/lead-1",
+      },
+    ]);
+    expect(JSON.stringify(sent)).not.toContain("app-pass");
+  });
+
+  it("контакт не почта — без replyTo; лид не записан — так и сказано", async () => {
+    const sent: MailMessage[] = [];
+    const notify = emailNotifierFromEnv({ SMTP_PASS: "x", ORDER_EMAIL_TO: "me@ya.ru" }, async (m) => void sent.push(m));
+    await notify!(notice({ order: { name: "", contact: "@ivan_test", task: "бот", details: "" }, leadId: null }));
+    expect(sent[0]).not.toHaveProperty("replyTo");
+    expect(sent[0]).toMatchObject({ to: "me@ya.ru", subject: "Заявка с сайта WebIK — @ivan_test" });
+    expect(sent[0].text).toContain("не записалась");
+  });
+
+  it("тема письма — одна строка", () => {
+    expect(orderSubject({ name: "Иван\r\nBcc: x@y.ru", contact: "@i", task: "т", details: "" })).not.toMatch(/[\r\n]/);
   });
 });
 
@@ -71,7 +126,10 @@ describe("submitOrder", () => {
   it("CRM и Telegram независимы: принято, если сработал хоть один путь", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const saves: string[] = [];
-    const save = async (o: Order, s: string) => void saves.push(`${s}:${o.contact}`);
+    const save = async (o: Order, s: string) => {
+      saves.push(`${s}:${o.contact}`);
+      return "lead-id";
+    };
     const failing = async () => {
       throw new Error("x");
     };
@@ -100,9 +158,9 @@ describe("submitOrder", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect(await submitOrder(ORDER, "form", "ip", { save: null, notify: failing, limiter })).toEqual({ ok: false, reason: "failed" });
 
-    const ok = vi.fn(async (_text: string) => {});
+    const ok = vi.fn(async (_notice: OrderNotice) => {});
     expect(await submitOrder(ORDER, "assistant", "ip", { save: null, notify: ok, limiter })).toMatchObject({ ok: true });
-    expect(ok.mock.calls[0][0]).toContain("ИИ-ассистент");
+    expect(ok.mock.calls[0][0].text).toContain("ИИ-ассистент");
 
     await submitOrder(ORDER, "form", "ip", { save: null, notify: ok, limiter });
     expect(await submitOrder(ORDER, "form", "ip", { save: null, notify: ok, limiter })).toEqual({ ok: false, reason: "rate_limited" });

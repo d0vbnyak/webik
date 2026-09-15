@@ -6,10 +6,18 @@
  *   1. **CRM админки** — главный путь. Лид на этапе «Ответили» с шагом «Ответить и
  *      квалифицировать» на сегодня, как входящее обращение, заведённое вручную
  *      (src/admin/pages/Crm.tsx). Текст заявки — касанием «Сообщение».
- *   2. **Telegram** — уведомление, если заданы переменные. С прод-сервера Timeweb
- *      api.telegram.org недоступен (проверено 15.09.2026), поэтому там его нет.
+ *   2. **Уведомления** — письмо на почту и/или Telegram, если заданы переменные.
+ *      С прод-сервера Timeweb api.telegram.org недоступен (проверено 15.09.2026),
+ *      SMTP Gmail и Яндекса — доступен. Поэтому в проде уведомляет почта.
  *
- * Заявка принята, если сработал хотя бы один путь.
+ * Заявка принята, если сработал хотя бы один путь: CRM или уведомление.
+ *
+ * Переменные окружения для почты (включается, когда задан SMTP_PASS):
+ *   SMTP_HOST       по умолчанию smtp.gmail.com
+ *   SMTP_PORT       по умолчанию 465 (TLS); 587 — STARTTLS
+ *   SMTP_USER       ящик-отправитель, по умолчанию CONTACT_EMAIL
+ *   SMTP_PASS       пароль приложения этого ящика (не основной пароль)
+ *   ORDER_EMAIL_TO  куда слать, по умолчанию CONTACT_EMAIL
  *
  * Переменные окружения для Telegram:
  *   TELEGRAM_BOT_TOKEN  токен бота, от имени которого приходят заявки
@@ -19,13 +27,17 @@
  * Имя ADMIN_CHAT_ID от support-bot сознательно не подхватывается: иначе любая
  * проверка формы в `npm run dev` слала бы настоящее сообщение.
  */
+import { createTransport } from "nodemailer";
 import { formatOrder, type Order, type OrderSource } from "../shared/order";
+import { CONTACT_EMAIL, SITE_URL } from "../shared/contacts";
 import { limiterIpKey } from "./api/auth";
 import type { Db } from "./db/db";
 
-export type OrderNotifier = (text: string) => Promise<void>;
-/** Сохраняет заявку. Бросает, если сохранить не удалось. */
-export type OrderSaver = (order: Order, source: OrderSource) => Promise<void>;
+/** Что знает уведомление о заявке. leadId — если заявка уже записана в CRM. */
+export type OrderNotice = { order: Order; source: OrderSource; text: string; leadId: string | null };
+export type OrderNotifier = (notice: OrderNotice) => Promise<void>;
+/** Сохраняет заявку и возвращает id лида. Бросает, если сохранить не удалось. */
+export type OrderSaver = (order: Order, source: OrderSource) => Promise<string>;
 
 type Env = Record<string, string | undefined>;
 
@@ -35,7 +47,7 @@ export function telegramNotifierFromEnv(env: Env, fetchImpl: typeof fetch = fetc
   const chatId = env.TELEGRAM_CHAT_ID?.trim();
   if (!token || !chatId) return null;
 
-  return async (text) => {
+  return async ({ text }) => {
     const res = await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -47,6 +59,81 @@ export function telegramNotifierFromEnv(env: Env, fetchImpl: typeof fetch = fetc
       const detail = await res.text().catch(() => "");
       throw new Error(`Telegram ответил ${res.status}: ${detail.slice(0, 200)}`);
     }
+  };
+}
+
+/** Письмо, которое уходит в SMTP. Отдельный тип — чтобы подменять отправку в тестах. */
+export type MailMessage = { from: string; to: string; replyTo?: string; subject: string; text: string };
+export type SendMail = (message: MailMessage) => Promise<unknown>;
+
+/** Тема письма: одна строка, без переносов и длинных хвостов. */
+export function orderSubject(order: Order): string {
+  const who = (order.name || order.contact).replace(/\s+/g, " ").slice(0, 80);
+  return `Заявка с сайта WebIK — ${who}`;
+}
+
+/** Текст письма: сама заявка и ссылка на карточку лида. */
+export function orderEmailText({ text, leadId }: OrderNotice): string {
+  const link = leadId ? `Карточка в CRM: ${SITE_URL}/admin/crm/${leadId}` : "В CRM заявка не записалась — ответьте по контакту выше.";
+  return `${text}\n\n${link}`;
+}
+
+/** Отправитель писем о заявках или null, если не задан SMTP_PASS. */
+export function emailNotifierFromEnv(env: Env, send?: SendMail): OrderNotifier | null {
+  const pass = env.SMTP_PASS?.trim();
+  if (!pass) return null;
+  const user = env.SMTP_USER?.trim() || CONTACT_EMAIL;
+  const to = env.ORDER_EMAIL_TO?.trim() || CONTACT_EMAIL;
+  const port = Number(env.SMTP_PORT ?? 465);
+
+  const deliver: SendMail =
+    send ??
+    (() => {
+      const transport = createTransport({
+        host: env.SMTP_HOST?.trim() || "smtp.gmail.com",
+        port,
+        secure: port === 465,
+        auth: { user, pass },
+        // Посетитель ждёт ответа формы — долго висеть на почтовом сервере нельзя
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 15_000,
+      });
+      return (message) => transport.sendMail(message);
+    })();
+
+  return async (notice) => {
+    const email = notice.order.contact.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)?.[0];
+    await deliver({
+      from: `"Сайт WebIK" <${user}>`,
+      to,
+      // «Ответить» в почте сразу пишет клиенту, если он оставил почту
+      ...(email ? { replyTo: email } : {}),
+      subject: orderSubject(notice.order),
+      text: orderEmailText(notice),
+    });
+  };
+}
+
+/**
+ * Все настроенные уведомления разом: почта и Telegram. Успех — если дошло хотя бы
+ * одно; упавшие пишутся в лог. null — ни одно не настроено.
+ */
+export function notifiersFromEnv(env: Env): OrderNotifier | null {
+  const channels = [
+    { name: "почта", notify: emailNotifierFromEnv(env) },
+    { name: "Telegram", notify: telegramNotifierFromEnv(env) },
+  ].filter((c): c is { name: string; notify: OrderNotifier } => c.notify !== null);
+  if (channels.length === 0) return null;
+
+  return async (notice) => {
+    const results = await Promise.allSettled(channels.map((c) => c.notify(notice)));
+    let delivered = false;
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") delivered = true;
+      else console.error(`[order] уведомление (${channels[i].name}) не ушло:`, (r.reason as Error)?.message);
+    });
+    if (!delivered) throw new Error("ни одно уведомление не ушло");
   };
 }
 
@@ -113,6 +200,7 @@ export function crmOrderSaver(db: Db): OrderSaver {
       ],
     );
     if (rows.length === 0) throw new Error("в админке нет пользователя — заявку некому записать");
+    return rows[0].id;
   };
 }
 
@@ -165,7 +253,7 @@ export type SubmitResult =
   | { ok: true; saved: boolean; notified: boolean }
   | { ok: false; reason: "not_configured" | "rate_limited" | "failed" };
 
-/** Принимает проверенную заявку: CRM, затем Telegram. Ошибки не бросает — возвращает причину. */
+/** Принимает проверенную заявку: CRM, затем уведомления. Ошибки не бросает — возвращает причину. */
 export async function submitOrder(order: Order, source: OrderSource, ip: string, deps: OrderDeps): Promise<SubmitResult> {
   if (!deps.save && !deps.notify) return { ok: false, reason: "not_configured" };
   // IPv6 — по подсети /64: иначе один хост обходит лимит сменой адреса
@@ -173,9 +261,10 @@ export async function submitOrder(order: Order, source: OrderSource, ip: string,
 
   let saved = false;
   let notified = false;
+  let leadId: string | null = null;
   if (deps.save) {
     try {
-      await deps.save(order, source);
+      leadId = await deps.save(order, source);
       saved = true;
     } catch (e) {
       console.error("[order] не удалось записать заявку в CRM:", (e as Error).message);
@@ -183,10 +272,10 @@ export async function submitOrder(order: Order, source: OrderSource, ip: string,
   }
   if (deps.notify) {
     try {
-      await deps.notify(formatOrder(order, source));
+      await deps.notify({ order, source, text: formatOrder(order, source), leadId });
       notified = true;
     } catch (e) {
-      console.error("[order] не удалось отправить заявку в Telegram:", (e as Error).message);
+      console.error("[order] уведомление о заявке не ушло:", (e as Error).message);
     }
   }
   return saved || notified ? { ok: true, saved, notified } : { ok: false, reason: "failed" };

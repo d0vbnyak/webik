@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createPgliteDb, hasTransactionControl, migrate, parseTimestamp, type Db } from "../db/db";
 import { createApp } from "./app";
+import type { OrderNotifier, OrderSaver } from "../orders";
 import { LoginLimiter, Semaphore, createUser, hashPassword, isTokenFormat, limiterIpKey, verifyPassword } from "./auth";
 import { buildQuery, QueryError, validateRequest } from "./query";
 import { base32Decode, base32Encode, generateTotpSecret, totpCode, verifyTotp } from "./totp";
@@ -513,7 +514,7 @@ describe("/api/db", () => {
 
 describe("/api/order", () => {
   const ORDER = { name: "Иван", contact: "@ivan_test", task: "бот поддержки", details: "до 100 тыс." };
-  type Opts = { notify?: ((text: string) => Promise<void>) | null; save?: null | (() => Promise<void>) };
+  type Opts = { notify?: OrderNotifier | null; save?: OrderSaver | null };
   const appWith = ({ notify = null, save }: Opts = {}) =>
     createApp({ db, secureCookies: false, clientIp: () => ip, limiter, orderNotifier: notify, ...(save !== undefined ? { orderSaver: save } : {}) });
   const send = (a: ReturnType<typeof createApp>, body: unknown, csrf = true) =>
@@ -551,11 +552,19 @@ describe("/api/order", () => {
     expect(leads.at(-1)!.touch_comment).toContain("Детали: до 100 тыс.");
   });
 
-  it("Telegram, если настроен, получает копию", async () => {
+  it("уведомление, если настроено, получает заявку и id лида", async () => {
     const sent: string[] = [];
-    expect((await send(appWith({ notify: async (t) => void sent.push(t) }), ORDER)).status).toBe(200);
+    const leadIds: (string | null)[] = [];
+    const notify: OrderNotifier = async (n) => {
+      sent.push(n.text);
+      leadIds.push(n.leadId);
+    };
+    expect((await send(appWith({ notify }), ORDER)).status).toBe(200);
     expect(sent).toHaveLength(1);
     expect(sent[0]).toContain("форма на сайте");
+    // Уведомление знает id лида — для ссылки на карточку в письме
+    const [row] = await db.query<{ id: string }>("select id from leads order by created_at desc limit 1");
+    expect(leadIds).toEqual([row.id]);
   });
 
   it("без заголовка X-WebIK — 403 и ничего не записано", async () => {

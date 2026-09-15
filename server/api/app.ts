@@ -68,7 +68,7 @@ export type AppOptions = {
   trustedPasswordChecks?: Semaphore;
   /** Ожидание свободной проверки, мс. */
   passwordWaitMs?: number;
-  /** Уведомление о заявке в Telegram (server/orders.ts). null — не настроено. Заявки в CRM пишутся всегда. */
+  /** Уведомления о заявке — почта, Telegram (server/orders.ts). null — не настроены. Заявки в CRM пишутся всегда. */
   orderNotifier?: OrderNotifier | null;
   /** Куда писать заявки. По умолчанию — CRM в этой же базе; подменяется в тестах. */
   orderSaver?: OrderSaver | null;

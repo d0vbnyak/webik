@@ -8,8 +8,9 @@
  *   TRUSTED_PROXY_HOST  имя прокси в docker-сети (caddy): только его
  *                       X-Forwarded-For считается адресом клиента
  *   SECURE_COOKIES      0 — только для локальной проверки без HTTPS
- *   TELEGRAM_BOT_TOKEN  бот, который дублирует заявки с сайта в Telegram (server/orders.ts)
- *   TELEGRAM_CHAT_ID    куда их присылать. Не заданы — заявки идут только в CRM
+ *   SMTP_PASS …         письмо о каждой заявке с сайта (переменные — в server/orders.ts)
+ *   TELEGRAM_BOT_TOKEN  то же в Telegram (с Timeweb не работает, см. server/orders.ts)
+ *   TELEGRAM_CHAT_ID    Ничего не задано — заявки идут только в CRM
  *
  * Чат сайта (/api/chat) здесь не подключён: Anthropic API не обслуживает Россию,
  * в проде чат вернётся вместе с российской моделью. Пока его нет, виджет
@@ -23,7 +24,7 @@ import path from "node:path";
 import { createPgDb, migrate } from "./db/db";
 import { createApp } from "./api/app";
 import { clientIp, trustedProxyByHost } from "./http";
-import { telegramNotifierFromEnv } from "./orders";
+import { notifiersFromEnv } from "./orders";
 
 process.on("unhandledRejection", (e) => {
   console.error("[webik] необработанная ошибка:", (e as Error)?.message ?? e);
@@ -38,7 +39,8 @@ const port = Number(env.PORT ?? 8080);
 const staticDir = path.resolve(env.STATIC_DIR ?? "dist");
 const secureCookies = env.SECURE_COOKIES !== "0";
 const isTrustedProxy = trustedProxyByHost(env.TRUSTED_PROXY_HOST);
-const orderNotifier = telegramNotifierFromEnv(env);
+const orderNotifier = notifiersFromEnv(env);
+if (!orderNotifier) console.warn("[webik] SMTP_PASS не задан — уведомлений о заявках нет, только CRM");
 
 const db = await createPgDb(env.DATABASE_URL);
 const applied = await migrate(db);
