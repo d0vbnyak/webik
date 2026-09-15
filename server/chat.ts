@@ -9,8 +9,8 @@
  *   POST /api/chat  { sessionId, message } → { sessionId, reply, orderSent }
  *
  * Заявки ассистент отправляет сам: у модели есть инструмент send_order, его
- * вызов проверяется и уходит в Telegram через server/orders.ts — тем же путём,
- * что и форма. Лимиты и проверка полей — в коде, не в промпте.
+ * вызов проверяется и уходит в CRM админки (и в Telegram, если настроен) через
+ * server/orders.ts — тем же путём, что и форма. Лимиты и проверка полей — в коде, не в промпте.
  *
  * Два принципа, которые тут важнее красоты кода:
  *
@@ -28,7 +28,7 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { SYSTEM_PROMPT } from "./kb";
-import { OrderLimiter, submitOrder, type OrderNotifier } from "./orders";
+import { OrderLimiter, submitOrder, type OrderNotifier, type OrderSaver } from "./orders";
 import { HISTORY_MAX_MESSAGES, MESSAGE_MAX_CHARS } from "../shared/chat";
 import { CONTACT_EMAIL, TELEGRAM_HANDLE } from "../shared/contacts";
 import { validateOrder } from "../shared/order";
@@ -72,7 +72,7 @@ const LIMITS = {
 const ORDER_TOOL: Anthropic.Tool = {
   name: "send_order",
   description:
-    "Передаёт заявку посетителя в Telegram владельцу студии. Вызывай, когда посетитель " +
+    "Передаёт заявку посетителя владельцу студии. Вызывай, когда посетитель " +
     "хочет заказать услугу или обсудить проект, и в диалоге уже есть контакт для связи " +
     "(телефон, почта или Telegram) и суть задачи. Без контакта не вызывай — сначала спроси его. " +
     "Одну и ту же заявку повторно не отправляй.",
@@ -95,7 +95,11 @@ const ORDER_TOOL: Anthropic.Tool = {
 
 type Session = { messages: Anthropic.MessageParam[]; touched: number; ordersSent: number };
 
-export type ChatOptions = { apiKey: string | undefined; orderNotifier: OrderNotifier | null };
+export type ChatOptions = {
+  apiKey: string | undefined;
+  orderSaver: OrderSaver | null;
+  orderNotifier: OrderNotifier | null;
+};
 
 /** Состояние в памяти процесса: перезапуск сервера его обнуляет. */
 const ipHits = new Map<string, number[]>();
@@ -218,7 +222,7 @@ async function runOrderTool(
   input: unknown,
   session: Session,
   ip: string,
-  notify: OrderNotifier | null,
+  deps: { save: OrderSaver | null; notify: OrderNotifier | null },
 ): Promise<ToolOutcome> {
   if (session.ordersSent >= LIMITS.ordersPerSession) {
     return {
@@ -233,7 +237,7 @@ async function runOrderTool(
   if ("error" in order) {
     return { content: `Заявка не принята: ${order.error} Уточни у посетителя и попробуй снова.`, isError: true, sent: false };
   }
-  const result = await submitOrder(order, "assistant", ip, { notify, limiter: orderLimiter });
+  const result = await submitOrder(order, "assistant", ip, { ...deps, limiter: orderLimiter });
   if (result.ok) {
     session.ordersSent += 1;
     return {
@@ -267,7 +271,7 @@ const ORDER_SENT_REPLY = "Заявку передал — с вами свяжу
 async function runTurn(
   session: Session,
   ip: string,
-  opts: { apiKey: string; orderNotifier: OrderNotifier | null },
+  opts: { apiKey: string; orderSaver: OrderSaver | null; orderNotifier: OrderNotifier | null },
 ): Promise<Turn> {
   // Посетитель в окне чата не ждёт по 10 минут (таймаут SDK по умолчанию)
   const client = new Anthropic({ apiKey: opts.apiKey, timeout: 45_000, maxRetries: 1 });
@@ -337,7 +341,7 @@ async function runTurn(
         ? // Аргументы обрезанного вызова могут быть неполными — не выполняем
           { content: "Вызов оборвался на лимите длины и не выполнен. Повтори его коротко.", isError: true, sent: false }
         : call.name === ORDER_TOOL.name
-          ? await runOrderTool(call.input, session, ip, opts.orderNotifier)
+          ? await runOrderTool(call.input, session, ip, { save: opts.orderSaver, notify: opts.orderNotifier })
           : { content: "Такого инструмента нет.", isError: true, sent: false };
       orderSent ||= outcome.sent;
       results.push({ type: "tool_result", tool_use_id: call.id, content: outcome.content, is_error: outcome.isError });
@@ -395,7 +399,7 @@ export async function handleChat(
   opts: ChatOptions,
 ): Promise<void> {
   if (req.method === "GET") {
-    send(res, 200, { enabled: Boolean(opts.apiKey), orders: Boolean(opts.orderNotifier) });
+    send(res, 200, { enabled: Boolean(opts.apiKey), orders: Boolean(opts.orderSaver || opts.orderNotifier) });
     return;
   }
   if (req.method !== "POST") {
@@ -464,7 +468,7 @@ export async function handleChat(
   };
 
   try {
-    const turn = await runTurn(session, ip, { apiKey, orderNotifier: opts.orderNotifier });
+    const turn = await runTurn(session, ip, { apiKey, orderSaver: opts.orderSaver, orderNotifier: opts.orderNotifier });
     if (turn.keep) save();
     dayCount += 1;
 

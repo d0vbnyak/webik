@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { telegramNotifierFromEnv } from "./server/orders";
+import { crmOrderSaver, telegramNotifierFromEnv } from "./server/orders";
 
 /**
  * Эндпоинт чата на dev-сервере.
@@ -23,11 +23,12 @@ function chatApi(mode: string): Plugin {
       server.middlewares.use("/api/chat", (req, res, next) => {
         // Обработчик грузится через Vite, чтобы правки подхватывались без
         // перезапуска сервера.
-        server
-          .ssrLoadModule("/server/chat.ts")
-          .then((mod) =>
-            mod.handleChat(req, res, {
+        // Заявки из чата пишутся в ту же базу PGlite, что у админки (server/dev.ts)
+        Promise.all([server.ssrLoadModule("/server/chat.ts"), server.ssrLoadModule("/server/dev.ts")])
+          .then(async ([chat, dev]) =>
+            chat.handleChat(req, res, {
               apiKey: env.ANTHROPIC_API_KEY,
+              orderSaver: crmOrderSaver(await dev.getDevDb()),
               orderNotifier: telegramNotifierFromEnv(env),
             }),
           )

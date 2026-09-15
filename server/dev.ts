@@ -52,7 +52,8 @@ export function getDevHandler(opts: DevOptions): Promise<Handler> {
   return handler;
 }
 
-async function buildDevHandler(opts: DevOptions): Promise<Handler> {
+/** База разработки — одна на процесс. Её же берёт чат (vite.config.ts), чтобы писать заявки в CRM. */
+export function getDevDb(): Promise<Db> {
   if (!g.__webikDevDb) {
     g.__webikDevDb = openDevDb();
     // Упавшую инициализацию не запоминаем — следующий запрос попробует снова
@@ -60,7 +61,11 @@ async function buildDevHandler(opts: DevOptions): Promise<Handler> {
       g.__webikDevDb = undefined;
     });
   }
-  const db = await g.__webikDevDb;
+  return g.__webikDevDb;
+}
+
+async function buildDevHandler(opts: DevOptions): Promise<Handler> {
+  const db = await getDevDb();
   // База открыта раньше, чем появились новые миграции, — докатываем их
   const applied = await migrate(db);
   if (applied.length) console.log(`[api] миграции: ${applied.join(", ")}`);

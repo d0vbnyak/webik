@@ -43,7 +43,7 @@ const sent: string[] = [];
 
 beforeAll(async () => {
   server = createServer((req, res) =>
-    void handleChat(req, res, { apiKey: "test", orderNotifier: async (t) => void sent.push(t) }),
+    void handleChat(req, res, { apiKey: "test", orderSaver: null, orderNotifier: async (t) => void sent.push(t) }),
   );
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   port = (server.address() as { port: number }).port;

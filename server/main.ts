@@ -8,12 +8,12 @@
  *   TRUSTED_PROXY_HOST  имя прокси в docker-сети (caddy): только его
  *                       X-Forwarded-For считается адресом клиента
  *   SECURE_COOKIES      0 — только для локальной проверки без HTTPS
- *   TELEGRAM_BOT_TOKEN  бот, который присылает заявки с сайта (server/orders.ts)
- *   TELEGRAM_CHAT_ID    куда их присылать; без этих двух форма заявки отвечает 503
+ *   TELEGRAM_BOT_TOKEN  бот, который дублирует заявки с сайта в Telegram (server/orders.ts)
+ *   TELEGRAM_CHAT_ID    куда их присылать. Не заданы — заявки идут только в CRM
  *
  * Чат сайта (/api/chat) здесь не подключён: Anthropic API не обслуживает Россию,
  * в проде чат вернётся вместе с российской моделью. Пока его нет, виджет
- * ассистента показывает форму заявки (POST /api/order).
+ * ассистента показывает форму заявки (POST /api/order), заявки падают в CRM.
  */
 import { Hono } from "hono";
 import { serve, type HttpBindings } from "@hono/node-server";
@@ -39,7 +39,6 @@ const staticDir = path.resolve(env.STATIC_DIR ?? "dist");
 const secureCookies = env.SECURE_COOKIES !== "0";
 const isTrustedProxy = trustedProxyByHost(env.TRUSTED_PROXY_HOST);
 const orderNotifier = telegramNotifierFromEnv(env);
-if (!orderNotifier) console.warn("[webik] TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID не заданы — заявки с сайта не принимаются");
 
 const db = await createPgDb(env.DATABASE_URL);
 const applied = await migrate(db);
@@ -78,8 +77,9 @@ root.get("/healthz", async (c) => {
 
 // Чат в проде выключен (см. шапку файла): виджет спрашивает GET и показывает форму заявки.
 // На POST — понятный ответ вместо «Запрос отклонён» (демо-чат на «Возможностях»)
-// orders: принимаются ли заявки. Нет — виджет сразу показывает контакты вместо формы
-root.get("/api/chat", (c) => c.json({ enabled: false, orders: Boolean(orderNotifier) }));
+// orders: принимаются ли заявки. Нет — виджет сразу показывает контакты вместо формы.
+// Заявки пишутся в CRM этой же базы, так что приём есть всегда
+root.get("/api/chat", (c) => c.json({ enabled: false, orders: true }));
 root.post("/api/chat", (c) =>
   c.json({ error: "ИИ-ассистент временно отдыхает. Оставьте заявку в окне справа внизу — ответим сами." }, 503),
 );

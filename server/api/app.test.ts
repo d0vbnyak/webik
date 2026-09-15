@@ -512,61 +512,103 @@ describe("/api/db", () => {
 });
 
 describe("/api/order", () => {
-  const ORDER = { name: "Иван", contact: "@ivan", task: "бот поддержки", details: "" };
-  const withNotifier = (notify: ((text: string) => Promise<void>) | null) =>
-    createApp({ db, secureCookies: false, clientIp: () => ip, limiter, orderNotifier: notify });
+  const ORDER = { name: "Иван", contact: "@ivan_test", task: "бот поддержки", details: "до 100 тыс." };
+  type Opts = { notify?: ((text: string) => Promise<void>) | null; save?: null | (() => Promise<void>) };
+  const appWith = ({ notify = null, save }: Opts = {}) =>
+    createApp({ db, secureCookies: false, clientIp: () => ip, limiter, orderNotifier: notify, ...(save !== undefined ? { orderSaver: save } : {}) });
   const send = (a: ReturnType<typeof createApp>, body: unknown, csrf = true) =>
     a.request("/api/order", {
       method: "POST",
       headers: { "content-type": "application/json", ...(csrf ? { "x-webik": "1" } : {}) },
       body: JSON.stringify(body),
     });
+  const siteLeads = () =>
+    db.query<Record<string, unknown>>(
+      `select l.*, u.email as owner, t.type as touch_type, t.comment as touch_comment
+       from leads l join users u on u.id = l.user_id left join lead_touches t on t.lead_id = l.id
+       where l.source in ('Сайт', 'Бот') order by l.created_at`,
+    );
 
-  it("заявка уходит в Telegram без входа в админку", async () => {
-    const sent: string[] = [];
-    const a = withNotifier(async (text) => void sent.push(text));
-    const res = await send(a, ORDER);
+  it("заявка без входа в админку попадает в CRM входящим лидом", async () => {
+    const before = (await siteLeads()).length;
+    const res = await send(appWith(), ORDER);
     expect(res.status).toBe(200);
+    const leads = await siteLeads();
+    expect(leads).toHaveLength(before + 1);
+    expect(leads.at(-1)).toMatchObject({
+      owner: "sergey@example.com",
+      company: "Иван — заявка с сайта",
+      contact_name: "Иван",
+      telegram_username: "ivan_test",
+      email: null,
+      business: "бот поддержки",
+      source: "Сайт",
+      stage: "replied",
+      reached_stage: "replied",
+      next_step: "Ответить и квалифицировать",
+      touch_type: "message",
+    });
+    expect(leads.at(-1)!.touch_comment).toContain("Детали: до 100 тыс.");
+  });
+
+  it("Telegram, если настроен, получает копию", async () => {
+    const sent: string[] = [];
+    expect((await send(appWith({ notify: async (t) => void sent.push(t) }), ORDER)).status).toBe(200);
     expect(sent).toHaveLength(1);
-    expect(sent[0]).toContain("бот поддержки");
     expect(sent[0]).toContain("форма на сайте");
   });
 
-  it("без заголовка X-WebIK — 403, ничего не отправлено", async () => {
-    const sent: string[] = [];
-    const res = await send(withNotifier(async (t) => void sent.push(t)), ORDER, false);
-    expect(res.status).toBe(403);
-    expect(sent).toHaveLength(0);
+  it("без заголовка X-WebIK — 403 и ничего не записано", async () => {
+    const before = (await siteLeads()).length;
+    expect((await send(appWith(), ORDER, false)).status).toBe(403);
+    expect(await siteLeads()).toHaveLength(before);
   });
 
-  it("поле-ловушка: ответ «ок», но ничего не отправлено", async () => {
-    const sent: string[] = [];
-    const res = await send(withNotifier(async (t) => void sent.push(t)), { ...ORDER, website: "spam.example" });
-    expect(res.status).toBe(200);
-    expect(sent).toHaveLength(0);
+  it("поле-ловушка: ответ «ок», но ничего не записано", async () => {
+    const before = (await siteLeads()).length;
+    const warn = console.warn;
+    console.warn = () => {};
+    try {
+      expect((await send(appWith(), { ...ORDER, website: "spam.example" })).status).toBe(200);
+    } finally {
+      console.warn = warn;
+    }
+    expect(await siteLeads()).toHaveLength(before);
   });
 
-  it("неполная заявка — 400; не настроен Telegram — 503; сбой — 502; флуд — 429", async () => {
-    expect((await send(withNotifier(async () => {}), { task: "бот" })).status).toBe(400);
-    expect((await send(withNotifier(null), ORDER)).status).toBe(503);
-
+  it("CRM упала, а Telegram дошёл — заявка принята; упало всё — 502", async () => {
     const errorLog = console.error;
     console.error = () => {};
     try {
-      const failing = withNotifier(async () => {
-        throw new Error("telegram down");
-      });
-      expect((await send(failing, ORDER)).status).toBe(502);
+      const failSave = async () => {
+        throw new Error("db down");
+      };
+      expect((await send(appWith({ save: failSave, notify: async () => {} }), ORDER)).status).toBe(200);
+      const res = await send(
+        appWith({
+          save: failSave,
+          notify: async () => {
+            throw new Error("telegram down");
+          },
+        }),
+        ORDER,
+      );
+      expect(res.status).toBe(502);
+      expect(await json(res)).toMatchObject({ error: expect.stringContaining("@d0vbnyak") });
     } finally {
       console.error = errorLog;
     }
+  });
+
+  it("неполная заявка — 400; нет ни CRM, ни Telegram — 503; флуд — 429", async () => {
+    expect((await send(appWith(), { task: "бот" })).status).toBe(400);
+    expect((await send(appWith({ save: null }), ORDER)).status).toBe(503);
 
     ip = "5.5.5.5";
-    const a = withNotifier(async () => {});
+    const a = appWith();
     const statuses = [];
     for (let i = 0; i < 4; i++) statuses.push((await send(a, ORDER)).status);
     expect(statuses).toEqual([200, 200, 200, 429]);
-    expect(await json(await send(a, ORDER))).toMatchObject({ error: expect.stringContaining("@d0vbnyak") });
   });
 });
 

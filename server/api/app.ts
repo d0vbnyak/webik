@@ -5,7 +5,7 @@
  *   POST /api/auth/logout
  *   GET  /api/auth/session  → { user } или { user: null }
  *   POST /api/db            описание запроса (query.ts) → { data, error }
- *   POST /api/order         заявка с сайта { name, contact, task, details } → Telegram
+ *   POST /api/order         заявка с сайта { name, contact, task, details } → CRM (+ Telegram)
  *
  * Защита от CSRF: cookie с SameSite=Strict, и каждый POST обязан нести
  * заголовок X-WebIK: 1 — чужой сайт не может выставить его без CORS-разрешения.
@@ -52,7 +52,7 @@ import {
   type SessionUser,
 } from "./auth";
 import { QueryError, buildQuery, referenceChecks, validateRequest } from "./query";
-import { OrderLimiter, submitOrder, type OrderNotifier } from "../orders";
+import { OrderLimiter, crmOrderSaver, submitOrder, type OrderNotifier, type OrderSaver } from "../orders";
 import { validateOrder } from "../../shared/order";
 import { TELEGRAM_HANDLE } from "../../shared/contacts";
 
@@ -68,8 +68,10 @@ export type AppOptions = {
   trustedPasswordChecks?: Semaphore;
   /** Ожидание свободной проверки, мс. */
   passwordWaitMs?: number;
-  /** Отправка заявок с сайта в Telegram (server/orders.ts). null — не настроена. */
+  /** Уведомление о заявке в Telegram (server/orders.ts). null — не настроено. Заявки в CRM пишутся всегда. */
   orderNotifier?: OrderNotifier | null;
+  /** Куда писать заявки. По умолчанию — CRM в этой же базе; подменяется в тестах. */
+  orderSaver?: OrderSaver | null;
   orderLimiter?: OrderLimiter;
 };
 
@@ -254,6 +256,7 @@ export function createApp(opts: AppOptions) {
 
   // Заявка с сайта. Публичный маршрут: сессия не нужна, защита — лимиты и поле-ловушка
   const orderLimiter = opts.orderLimiter ?? new OrderLimiter();
+  const orderSaver = opts.orderSaver === undefined ? crmOrderSaver(db) : opts.orderSaver;
   app.post("/order", async (c) => {
     const body = await readJson(c);
     // Поле-ловушка скрыто от людей; заполнил — бот. Отвечаем «ок», чтобы он не подбирал обход
@@ -267,6 +270,7 @@ export function createApp(opts: AppOptions) {
     if ("error" in order) return c.json({ error: order.error }, 400);
 
     const result = await submitOrder(order, "form", opts.clientIp(c), {
+      save: orderSaver,
       notify: opts.orderNotifier ?? null,
       limiter: orderLimiter,
     });
