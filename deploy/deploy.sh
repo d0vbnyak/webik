@@ -27,6 +27,10 @@ if grep -rq "sk-ant" dist build; then
   echo "СТОП: в сборке найден ключ Anthropic" >&2
   exit 1
 fi
+if grep -rqE "[0-9]{8,10}:[A-Za-z0-9_-]{35}" dist build; then
+  echo "СТОП: в сборке похоже на токен Telegram-бота" >&2
+  exit 1
+fi
 
 echo "== упаковка"
 STAGE="$(mktemp -d)"

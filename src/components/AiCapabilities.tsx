@@ -306,7 +306,7 @@ function ServiceCard({ service, i }: { service: Service; i: number }) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-40px" }}
       transition={{ duration: 0.45, delay: (i % 3) * 0.06 }}
-      className="group h-full rounded-2xl bg-white border border-black/[0.05] shadow-sm p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-brand-green/50"
+      className="group h-full rounded-2xl bg-white border border-black/[0.05] shadow-sm p-5 transition-[translate,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-brand-green/50"
     >
       <span className="inline-flex w-10 h-10 items-center justify-center rounded-xl bg-brand-green/20 ring-1 ring-inset ring-brand-green/30 text-[#1a1a1a] transition-colors duration-200 group-hover:bg-brand-green">
         {service.icon}

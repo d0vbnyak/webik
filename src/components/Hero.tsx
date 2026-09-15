@@ -1,80 +1,34 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { motion, useReducedMotion } from "motion/react";
-
-const CONTACT_EMAIL = "hello@webik.ru";
-
-const VIDEO_URL =
-  "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260603_132049_036591b8-6e92-4760-b94c-a7ea6eef315c.mp4";
+import { useState, type FormEvent } from "react";
+import { motion } from "motion/react";
+import { openAssistant } from "./assistant/events";
 
 function EyePill() {
-  const reduceMotion = useReducedMotion();
-
   return (
     <span className="relative w-[24px] md:w-[42px] lg:w-[62px] h-[24px] md:h-[28px] lg:h-[34px] inline-flex items-center justify-center align-middle mx-1 md:mx-2">
       {/* Точка — всегда на месте */}
       <span className="w-2 h-2 rounded-full bg-[#1a1a1a]" />
-      {/* Овал — ездит по горизонтали и отталкивается от точки:
-          easeIn к краю (разгон), easeOut после разворота (отскок).
-          При prefers-reduced-motion — остаётся неподвижным. */}
-      <motion.span
-        animate={reduceMotion ? { x: "0%" } : { x: ["0%", "36%", "0%", "-36%", "0%"] }}
-        transition={
-          reduceMotion
-            ? { duration: 0 }
-            : {
-                duration: 2.8,
-                repeat: Infinity,
-                ease: ["easeIn", "easeOut", "easeIn", "easeOut"],
-              }
-        }
-        className="absolute inset-0 border-[2px] border-[#1a1a1a] rounded-full"
-      />
+      {/* Овал ездит по горизонтали и отталкивается от точки. CSS-анимация transform
+          идёт в потоке композитора и не конкурирует с прокруткой за главный поток.
+          При prefers-reduced-motion стоит на месте. Ключевые кадры — в index.css */}
+      <span className="eye-pill absolute inset-0 border-[2px] border-[#1a1a1a] rounded-full" />
     </span>
   );
 }
 
 export default function Hero() {
   const [task, setTask] = useState("");
-  const reduceMotion = useReducedMotion();
-  const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Уважаем prefers-reduced-motion: не автозапускаем фоновое видео и ставим на паузу
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (reduceMotion) {
-      video.pause();
-    } else {
-      // play() возвращает промис; игнорируем возможный AbortError при размонтировании
-      void video.play().catch(() => {});
-    }
-  }, [reduceMotion]);
-
+  // Задача уходит ассистенту: он уточнит детали и отправит заявку
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const text = task.trim();
     if (!text) return;
-    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
-      "Заявка с сайта WebIK",
-    )}&body=${encodeURIComponent(text)}`;
+    openAssistant(text);
+    setTask("");
   };
 
   return (
-    <section className="relative min-h-[100svh] sm:min-h-[140svh] w-full flex flex-col items-center justify-start overflow-hidden bg-bg-base">
-      {/* Фоновое видео */}
-      <div className="absolute top-[34vh] sm:top-[20vh] left-0 w-full h-[76vh] sm:h-[120vh] z-0 pointer-events-none">
-        <video
-          ref={videoRef}
-          autoPlay={!reduceMotion}
-          loop={!reduceMotion}
-          muted
-          playsInline
-          className="w-full h-full object-cover opacity-100"
-          src={VIDEO_URL}
-        />
-        <div className="absolute top-0 left-0 w-full h-24 sm:h-32 bg-gradient-to-b from-bg-base to-transparent"></div>
-      </div>
-
+    <section className="relative min-h-[100svh] w-full flex flex-col items-center justify-start overflow-hidden bg-bg-base">
       {/* Контент */}
       <div className="max-w-7xl w-full mx-auto px-8 md:px-16 lg:px-20 relative z-10 grid grid-cols-12 gap-x-4 md:gap-x-8 pt-32 sm:pt-40 md:pt-44">
         <div className="col-span-12 md:col-span-10 md:col-start-2">
@@ -95,7 +49,7 @@ export default function Hero() {
             </span>
           </motion.h1>
 
-          {/* Поисковая капсула */}
+          {/* Поле задачи — открывает ИИ-ассистента */}
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
@@ -112,11 +66,11 @@ export default function Hero() {
                 onChange={(e) => setTask(e.target.value)}
                 aria-label="Опишите вашу задачу"
                 placeholder="Опишите вашу задачу..."
-                className="w-full bg-transparent text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none"
+                className="w-full bg-transparent text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none"
               />
               <button
                 type="submit"
-                aria-label="Отправить"
+                aria-label="Отправить ИИ-ассистенту"
                 className="bg-[#1a1a1a] text-white w-9 h-9 rounded-full relative shrink-0"
               >
                 <svg
@@ -133,6 +87,9 @@ export default function Hero() {
                 </svg>
               </button>
             </form>
+            <p className="mt-3 pl-1 text-xs text-[#1a1a1a]/45">
+              ИИ-ассистент уточнит детали и передаст заявку
+            </p>
           </motion.div>
         </div>
       </div>
@@ -144,7 +101,7 @@ export default function Hero() {
           disabled
           aria-disabled="true"
           title="Английская версия скоро"
-          className="flex items-center gap-1.5 rounded-full bg-white/30 border border-white/50 backdrop-blur-md px-3.5 py-2 text-[11px] tracking-wide text-[#1a1a1a] shadow-sm cursor-not-allowed"
+          className="flex items-center gap-1.5 rounded-full bg-white/70 border border-black/[0.06] px-3.5 py-2 text-[11px] tracking-wide text-[#1a1a1a] shadow-sm cursor-not-allowed"
         >
           <span className="font-medium">ru</span>
           <span className="text-[#1a1a1a]/40">—</span>
@@ -152,14 +109,9 @@ export default function Hero() {
         </button>
       </div>
 
-      {/* Якорь — низ слева */}
+      {/* Якорь — низ слева. Правый нижний угол занят кнопкой ассистента */}
       <div className="absolute bottom-5 left-5 md:left-8 z-20 text-[11px] tracking-wide text-[#1a1a1a]/70">
-        2026
-      </div>
-
-      {/* Якорь — низ справа */}
-      <div className="absolute bottom-5 right-5 md:right-8 z-20 text-[11px] tracking-wide text-[#1a1a1a]/70">
-        AI-решения для бизнеса
+        2026 — AI-решения для бизнеса
       </div>
     </section>
   );

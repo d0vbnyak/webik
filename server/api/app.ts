@@ -5,6 +5,7 @@
  *   POST /api/auth/logout
  *   GET  /api/auth/session  → { user } или { user: null }
  *   POST /api/db            описание запроса (query.ts) → { data, error }
+ *   POST /api/order         заявка с сайта { name, contact, task, details } → Telegram
  *
  * Защита от CSRF: cookie с SameSite=Strict, и каждый POST обязан нести
  * заголовок X-WebIK: 1 — чужой сайт не может выставить его без CORS-разрешения.
@@ -51,6 +52,9 @@ import {
   type SessionUser,
 } from "./auth";
 import { QueryError, buildQuery, referenceChecks, validateRequest } from "./query";
+import { OrderLimiter, submitOrder, type OrderNotifier } from "../orders";
+import { validateOrder } from "../../shared/order";
+import { TELEGRAM_HANDLE } from "../../shared/contacts";
 
 export type AppOptions = {
   db: Db;
@@ -64,6 +68,9 @@ export type AppOptions = {
   trustedPasswordChecks?: Semaphore;
   /** Ожидание свободной проверки, мс. */
   passwordWaitMs?: number;
+  /** Отправка заявок с сайта в Telegram (server/orders.ts). null — не настроена. */
+  orderNotifier?: OrderNotifier | null;
+  orderLimiter?: OrderLimiter;
 };
 
 type Env = { Variables: { user: SessionUser } };
@@ -104,6 +111,7 @@ export function createApp(opts: AppOptions) {
   const tooLarge = (c: Context) => c.json({ error: "Слишком большой запрос", data: null }, 413);
   app.use("/auth/*", bodyLimit({ maxSize: 8 * 1024, onError: tooLarge }));
   app.use("/db", bodyLimit({ maxSize: 2 * 1024 * 1024, onError: tooLarge }));
+  app.use("/order", bodyLimit({ maxSize: 16 * 1024, onError: tooLarge }));
 
   /**
    * Пользователь по cookie сессии. Браузер может прислать несколько cookie с одним
@@ -241,6 +249,36 @@ export function createApp(opts: AppOptions) {
       }
       console.error("[api/db]", (e as Error).message);
       return c.json({ data: null, error: { message: "Ошибка сервера" } }, 500);
+    }
+  });
+
+  // Заявка с сайта. Публичный маршрут: сессия не нужна, защита — лимиты и поле-ловушка
+  const orderLimiter = opts.orderLimiter ?? new OrderLimiter();
+  app.post("/order", async (c) => {
+    const body = await readJson(c);
+    // Поле-ловушка скрыто от людей; заполнил — бот. Отвечаем «ок», чтобы он не подбирал обход
+    // В логе — на случай, если поле заполнит автозаполнение браузера у живого клиента
+    if (typeof body?.website === "string" && body.website !== "") {
+      console.warn("[order] сработало поле-ловушка, заявка не отправлена");
+      return c.json({ ok: true });
+    }
+
+    const order = validateOrder(body);
+    if ("error" in order) return c.json({ error: order.error }, 400);
+
+    const result = await submitOrder(order, "form", opts.clientIp(c), {
+      notify: opts.orderNotifier ?? null,
+      limiter: orderLimiter,
+    });
+    if (result.ok) return c.json({ ok: true });
+    const direct = `Напишите напрямую в Telegram ${TELEGRAM_HANDLE}.`;
+    switch (result.reason) {
+      case "rate_limited":
+        return c.json({ error: `Заявок с вашего адреса уже много. ${direct}` }, 429);
+      case "not_configured":
+        return c.json({ error: `Приём заявок временно не работает. ${direct}` }, 503);
+      default:
+        return c.json({ error: `Не получилось отправить заявку. ${direct}` }, 502);
     }
   });
 

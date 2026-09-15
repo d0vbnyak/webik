@@ -60,7 +60,9 @@ export default function PhotoBeforeAfter() {
   const onPointerDown = (e: React.PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId);
     setDragging(true);
-    updateFromClientX(e.clientX);
+    // Пальцем разделитель едет только за движением: касание в начале вертикальной
+    // прокрутки страницы не должно дёргать его на место пальца
+    if (e.pointerType === "mouse") updateFromClientX(e.clientX);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!dragging) return;
@@ -79,7 +81,7 @@ export default function PhotoBeforeAfter() {
   return (
     <div
       ref={frameRef}
-      className="relative h-[240px] w-full touch-none select-none overflow-hidden rounded-xl border border-black/[0.05] shadow-sm"
+      className="relative h-[240px] w-full touch-pan-y select-none overflow-hidden rounded-xl border border-black/[0.05] shadow-sm"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

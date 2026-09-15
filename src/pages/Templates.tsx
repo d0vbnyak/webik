@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { Link } from "react-router";
 import PageHeader from "../components/PageHeader";
+import { mailto } from "../../shared/contacts";
 
 type Tpl = {
   name: string;
@@ -165,7 +166,7 @@ function CustomSiteBanner() {
           </div>
 
           <a
-            href="mailto:hello@webik.ru"
+            href={mailto()}
             className="group/btn inline-flex shrink-0 items-center justify-center gap-2 self-start sm:self-auto rounded-full border border-white/80 bg-white/60 backdrop-blur-md px-6 py-3 text-sm lowercase font-medium text-[#1a1a1a] shadow-[0_8px_24px_-8px_rgba(20,20,20,0.28),inset_0_1px_0_rgba(255,255,255,0.9)] hover:bg-white/85 transition-colors whitespace-nowrap"
           >
             написать нам

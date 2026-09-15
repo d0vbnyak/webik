@@ -13,6 +13,26 @@ body {
   @apply bg-bg-base text-zinc-900 font-sans antialiased;
 }
 
+/* «Глаз» в заголовке героя: овал ездит и отталкивается от точки —
+   разгон к краю (ease-in), отскок после разворота (ease-out) */
+@keyframes eye-pill {
+  0% { transform: translateX(0); animation-timing-function: ease-in; }
+  25% { transform: translateX(36%); animation-timing-function: ease-out; }
+  50% { transform: translateX(0); animation-timing-function: ease-in; }
+  75% { transform: translateX(-36%); animation-timing-function: ease-out; }
+  100% { transform: translateX(0); }
+}
+
+.eye-pill {
+  animation: eye-pill 2.8s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eye-pill {
+    animation: none;
+  }
+}
+
 /* Видимый фокус для клавиатурной навигации (доступность) */
 a:focus-visible,
 button:focus-visible {

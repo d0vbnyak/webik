@@ -3,6 +3,8 @@ import { NavLink } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import Logo from "./Logo";
 import { isVisible, type Section } from "../../shared/visibility";
+import { CONTACT_EMAIL, TELEGRAM_HANDLE, TELEGRAM_URL, mailto } from "../../shared/contacts";
+import { openAssistant } from "./assistant/events";
 
 const MOBILE_MENU_ID = "mobile-nav-panel";
 
@@ -78,7 +80,9 @@ export default function Navbar() {
   };
 
   return (
-    <header className="fixed top-0 left-0 w-full z-50 py-6 md:py-10 bg-gradient-to-b from-[#f1f1f1]/80 to-transparent backdrop-blur-[2px]">
+    // Без backdrop-blur: размытие под фиксированной шапкой пересчитывается на каждом
+    // кадре прокрутки и на слабых видеокартах даёт рывки
+    <header className="fixed top-0 left-0 w-full z-50 py-6 md:py-10 bg-gradient-to-b from-[#f1f1f1]/80 to-transparent">
       <div className="grid grid-cols-12 max-w-7xl mx-auto items-center px-8 md:px-16 lg:px-20 gap-x-4 md:gap-x-8">
         {/* Слева — бренд */}
         <Logo className="col-span-6 md:col-span-3" />
@@ -95,17 +99,21 @@ export default function Navbar() {
         {/* Справа — действия */}
         <div className="col-span-6 md:col-span-3 flex items-center justify-end gap-3 md:gap-5">
           <a
-            href="mailto:hello@webik.ru"
+            href={TELEGRAM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`Telegram ${TELEGRAM_HANDLE}`}
             className="hidden lg:inline-block text-xs lg:text-sm lowercase tracking-wide text-[#1a1a1a]/70 hover:text-[#1a1a1a] transition-colors whitespace-nowrap"
           >
-            связаться
+            telegram
           </a>
-          <a
-            href="mailto:hello@webik.ru"
+          <button
+            type="button"
+            onClick={() => openAssistant()}
             className="hidden sm:inline-flex items-center gap-2 bg-[#1a1a1a] text-white text-xs md:text-sm lowercase rounded-full px-5 py-2.5 hover:bg-black transition-colors whitespace-nowrap"
           >
             начать проект <span aria-hidden="true">→</span>
-          </a>
+          </button>
 
           {/* Анимированный гамбургер — mobile */}
           <button
@@ -167,19 +175,31 @@ export default function Navbar() {
                 ))}
                 <div className="h-px bg-black/[0.06]" />
                 <a
-                  href="mailto:hello@webik.ru"
+                  href={TELEGRAM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   onClick={closeMenu}
-                  className="text-sm lowercase tracking-wide text-[#1a1a1a]/80 hover:text-[#1a1a1a] transition-colors"
+                  className="text-sm tracking-wide text-[#1a1a1a]/80 hover:text-[#1a1a1a] transition-colors"
                 >
-                  связаться
+                  telegram {TELEGRAM_HANDLE}
                 </a>
                 <a
-                  href="mailto:hello@webik.ru"
+                  href={mailto()}
                   onClick={closeMenu}
+                  className="text-sm tracking-wide text-[#1a1a1a]/80 hover:text-[#1a1a1a] transition-colors break-all"
+                >
+                  {CONTACT_EMAIL}
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    openAssistant();
+                  }}
                   className="inline-flex items-center justify-center gap-2 bg-[#1a1a1a] text-white text-sm lowercase rounded-full px-5 py-3"
                 >
                   начать проект <span aria-hidden="true">→</span>
-                </a>
+                </button>
               </div>
             </motion.div>
           </>

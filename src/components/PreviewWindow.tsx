@@ -6,19 +6,27 @@ type PreviewWindowProps = {
 };
 
 /** Рамка в виде браузерного окна для живых демо.
- *  Содержимое монтируется только когда окно попадает во вьюпорт
- *  и размонтируется, уходя далеко за экран, — чтобы десятки демо
- *  и их анимации/canvas-циклы не работали одновременно вне видимости. */
+ *
+ *  Содержимое монтируется, когда окно подходит к экрану, и дальше остаётся
+ *  на месте. Раньше оно размонтировалось при уходе за экран: высота окна
+ *  схлопывалась до заглушки, и страница прыгала под пальцем при прокрутке
+ *  (CLS 0.4–0.6 на «Возможностях»). Бесконечные canvas-циклы сами встают на
+ *  паузу вне экрана — см. demos/useCanvasLoop.ts. */
 export default function PreviewWindow({ url, children }: PreviewWindowProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const io = new IntersectionObserver(
-      ([entry]) => setVisible(entry.isIntersecting),
-      { rootMargin: "200px 0px" },
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setMounted(true);
+        io.disconnect();
+      },
+      // С запасом: тяжёлое демо успевает смонтироваться до того, как окно видно
+      { rootMargin: "600px 0px" },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -43,7 +51,7 @@ export default function PreviewWindow({ url, children }: PreviewWindowProps) {
         ref={ref}
         className="p-4 md:p-5 bg-zinc-50/60 min-h-[260px] flex flex-col justify-center"
       >
-        {visible ? children : null}
+        {mounted ? children : null}
       </div>
     </div>
   );

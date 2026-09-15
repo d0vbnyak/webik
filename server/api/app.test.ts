@@ -511,6 +511,65 @@ describe("/api/db", () => {
   });
 });
 
+describe("/api/order", () => {
+  const ORDER = { name: "Иван", contact: "@ivan", task: "бот поддержки", details: "" };
+  const withNotifier = (notify: ((text: string) => Promise<void>) | null) =>
+    createApp({ db, secureCookies: false, clientIp: () => ip, limiter, orderNotifier: notify });
+  const send = (a: ReturnType<typeof createApp>, body: unknown, csrf = true) =>
+    a.request("/api/order", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(csrf ? { "x-webik": "1" } : {}) },
+      body: JSON.stringify(body),
+    });
+
+  it("заявка уходит в Telegram без входа в админку", async () => {
+    const sent: string[] = [];
+    const a = withNotifier(async (text) => void sent.push(text));
+    const res = await send(a, ORDER);
+    expect(res.status).toBe(200);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain("бот поддержки");
+    expect(sent[0]).toContain("форма на сайте");
+  });
+
+  it("без заголовка X-WebIK — 403, ничего не отправлено", async () => {
+    const sent: string[] = [];
+    const res = await send(withNotifier(async (t) => void sent.push(t)), ORDER, false);
+    expect(res.status).toBe(403);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("поле-ловушка: ответ «ок», но ничего не отправлено", async () => {
+    const sent: string[] = [];
+    const res = await send(withNotifier(async (t) => void sent.push(t)), { ...ORDER, website: "spam.example" });
+    expect(res.status).toBe(200);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("неполная заявка — 400; не настроен Telegram — 503; сбой — 502; флуд — 429", async () => {
+    expect((await send(withNotifier(async () => {}), { task: "бот" })).status).toBe(400);
+    expect((await send(withNotifier(null), ORDER)).status).toBe(503);
+
+    const errorLog = console.error;
+    console.error = () => {};
+    try {
+      const failing = withNotifier(async () => {
+        throw new Error("telegram down");
+      });
+      expect((await send(failing, ORDER)).status).toBe(502);
+    } finally {
+      console.error = errorLog;
+    }
+
+    ip = "5.5.5.5";
+    const a = withNotifier(async () => {});
+    const statuses = [];
+    for (let i = 0; i < 4; i++) statuses.push((await send(a, ORDER)).status);
+    expect(statuses).toEqual([200, 200, 200, 429]);
+    expect(await json(await send(a, ORDER))).toMatchObject({ error: expect.stringContaining("@d0vbnyak") });
+  });
+});
+
 describe("миграции", () => {
   it("R5: команды управления транзакцией находятся в любом месте", () => {
     for (const bad of ["commit work;", "select 1; commit;", "end transaction;", "begin isolation level serializable;", "rollback to savepoint x;", "-- x\nCOMMIT"]) {

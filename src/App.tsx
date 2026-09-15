@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import ScrollToTop from "./components/ScrollToTop";
+import AssistantWidget from "./components/assistant/AssistantWidget";
 import Home from "./pages/Home";
 import About from "./pages/About";
 import Templates from "./pages/Templates";
@@ -37,6 +38,7 @@ function SiteLayout() {
         </Routes>
       </main>
       <Footer />
+      <AssistantWidget />
     </div>
   );
 }

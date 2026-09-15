@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import PageHeader from "../components/PageHeader";
 import { PRICES } from "../../shared/prices";
+import { openAssistant } from "../components/assistant/events";
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -75,12 +76,13 @@ export default function Prices() {
             <p className="mt-2.5 max-w-3xl text-sm leading-relaxed text-[#1a1a1a]/55">
               {PRICES.modelCost}
             </p>
-            <a
-              href={`mailto:hello@webik.ru?subject=${encodeURIComponent("Расчёт стоимости")}`}
+            <button
+              type="button"
+              onClick={() => openAssistant()}
               className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#1a1a1a] text-white text-sm px-5 py-2.5 transition-opacity hover:opacity-90"
             >
               Запросить смету
-            </a>
+            </button>
             <p className="mt-4 text-xs text-[#1a1a1a]/40">
               Прайс пересмотрен{" "}
               {new Date(PRICES.updated).toLocaleDateString("ru-RU", {

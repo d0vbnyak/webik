@@ -1,6 +1,8 @@
 import { Link } from "react-router";
 import Logo from "./Logo";
 import { isVisible, type Section } from "../../shared/visibility";
+import { CONTACT_EMAIL, TELEGRAM_HANDLE, TELEGRAM_URL, mailto } from "../../shared/contacts";
+import { TelegramIcon } from "./assistant/AssistantWidget";
 
 // Скрытые разделы и услуги отфильтровываются — см. shared/visibility.ts
 const PAGES = (
@@ -29,13 +31,22 @@ const SERVICES = (
 export default function Footer() {
   return (
     <footer className="relative z-10 bg-bg-base border-t border-black/[0.06]">
-      <div className="max-w-7xl mx-auto px-8 md:px-16 lg:px-20 py-12 md:py-16 grid grid-cols-12 gap-y-10 gap-x-4 md:gap-x-8">
+      <div className="max-w-7xl mx-auto px-8 md:px-16 lg:px-20 pt-12 pb-24 md:py-16 grid grid-cols-12 gap-y-10 gap-x-4 md:gap-x-8">
         <div className="col-span-12 md:col-span-5">
           <Logo variant="white" />
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-[#1a1a1a]/60">
             AI-решения для бизнеса: боты, агенты, голосовые роботы и
             лендинги, которые приводят заявки.
           </p>
+          <a
+            href={TELEGRAM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#1a1a1a] px-4 py-2.5 text-sm text-white hover:bg-black transition-colors"
+          >
+            <TelegramIcon className="h-4 w-4" />
+            написать в Telegram {TELEGRAM_HANDLE}
+          </a>
         </div>
 
         <div className="col-span-6 md:col-span-3">
@@ -73,12 +84,23 @@ export default function Footer() {
           <span className="text-[11px] tracking-wide text-[#1a1a1a]/50">
             © 2026 WebIK — AI-решения для бизнеса
           </span>
-          <a
-            href="mailto:hello@webik.ru"
-            className="text-[11px] tracking-wide text-[#1a1a1a]/50 hover:text-[#1a1a1a] transition-colors"
-          >
-            hello@webik.ru
-          </a>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <a
+              href={TELEGRAM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[11px] tracking-wide text-[#1a1a1a]/50 hover:text-[#1a1a1a] transition-colors"
+            >
+              <TelegramIcon className="h-3.5 w-3.5" />
+              {TELEGRAM_HANDLE}
+            </a>
+            <a
+              href={mailto()}
+              className="text-[11px] tracking-wide text-[#1a1a1a]/50 hover:text-[#1a1a1a] transition-colors"
+            >
+              {CONTACT_EMAIL}
+            </a>
+          </div>
         </div>
       </div>
     </footer>

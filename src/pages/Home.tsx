@@ -96,7 +96,7 @@ export default function Home() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: "-40px" }}
                   transition={{ duration: 0.5, delay: (i % 4) * 0.08 }}
-                  className="group bg-white rounded-2xl border border-black/[0.05] p-6 shadow-sm transition-all duration-300"
+                  className="group bg-white rounded-2xl border border-black/[0.05] p-6 shadow-sm"
                 >
                   <div className="w-10 h-10 rounded-full bg-bg-base flex items-center justify-center group-hover:bg-brand-green transition-colors duration-300">
                     <svg

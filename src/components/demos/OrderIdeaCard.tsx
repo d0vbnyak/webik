@@ -1,11 +1,12 @@
 import { useId, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { openAssistant } from "../assistant/events";
 
 const HINTS = ["конфигуратор товара", "калькулятор доставки", "квиз-подбор", "мини-игра за скидку"];
 
 /**
- * CTA-карточка «Заказать свою идею»: посетитель описывает нужный виджет.
- * Эмуляция: ничего не отправляется — показываем дружелюбное подтверждение.
+ * CTA-карточка «Заказать свою идею»: посетитель описывает нужный виджет,
+ * идея уходит ИИ-ассистенту — он уточнит контакт и отправит заявку.
  */
 export default function OrderIdeaCard() {
   const uid = useId();
@@ -13,7 +14,9 @@ export default function OrderIdeaCard() {
   const [sent, setSent] = useState(false);
 
   const submit = () => {
-    if (idea.trim().length > 2) setSent(true);
+    if (idea.trim().length <= 2) return;
+    openAssistant(`Хочу интерактив для лендинга: ${idea.trim()}`);
+    setSent(true);
   };
 
   return (
@@ -32,11 +35,11 @@ export default function OrderIdeaCard() {
               ✓
             </span>
             <p className="font-display font-medium text-lg text-[#1a1a1a]">
-              идея принята
+              идея у ассистента
             </p>
             <p className="text-sm leading-relaxed text-[#1a1a1a]/55 max-w-xs">
-              соберём такой виджет под ваш лендинг и покажем демо. это, конечно,
-              демонстрация — но в жизни всё работает так же быстро.
+              он уточнит детали в окне справа внизу и передаст заявку. соберём
+              такой виджет под ваш лендинг и покажем демо.
             </p>
             <button
               type="button"

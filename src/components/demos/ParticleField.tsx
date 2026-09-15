@@ -1,31 +1,16 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import { useCanvasLoop } from "./useCanvasLoop";
 
 type Particle = { x: number; y: number; vx: number; vy: number };
 
 export default function ParticleField() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const resize = () => {
-      const { width, height } = canvas.getBoundingClientRect();
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-    resize();
-
-    const W = () => canvas.getBoundingClientRect().width;
-    const H = () => canvas.getBoundingClientRect().height;
-
+  useCanvasLoop(canvasRef, (ctx, size) => {
+    const canvas = ctx.canvas;
     const particles: Particle[] = Array.from({ length: 45 }, () => ({
-      x: Math.random() * W(),
-      y: Math.random() * H(),
+      x: Math.random() * size.width,
+      y: Math.random() * size.height,
       vx: (Math.random() - 0.5) * 0.6,
       vy: (Math.random() - 0.5) * 0.6,
     }));
@@ -46,12 +31,10 @@ export default function ParticleField() {
     canvas.addEventListener("pointerleave", onLeave);
     canvas.addEventListener("pointerup", onLeave);
     canvas.addEventListener("pointercancel", onLeave);
-    window.addEventListener("resize", resize);
 
-    let raf = 0;
-    const tick = () => {
-      const w = W();
-      const h = H();
+    const frame = () => {
+      const w = size.width;
+      const h = size.height;
       ctx.clearRect(0, 0, w, h);
 
       for (const p of particles) {
@@ -94,21 +77,19 @@ export default function ParticleField() {
         ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
         ctx.fill();
       }
-
-      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
 
-    return () => {
-      cancelAnimationFrame(raf);
-      canvas.removeEventListener("pointermove", onMove);
-      canvas.removeEventListener("pointerdown", onMove);
-      canvas.removeEventListener("pointerleave", onLeave);
-      canvas.removeEventListener("pointerup", onLeave);
-      canvas.removeEventListener("pointercancel", onLeave);
-      window.removeEventListener("resize", resize);
+    return {
+      frame,
+      cleanup: () => {
+        canvas.removeEventListener("pointermove", onMove);
+        canvas.removeEventListener("pointerdown", onMove);
+        canvas.removeEventListener("pointerleave", onLeave);
+        canvas.removeEventListener("pointerup", onLeave);
+        canvas.removeEventListener("pointercancel", onLeave);
+      },
     };
-  }, []);
+  });
 
   return (
     <div className="relative">

@@ -19,6 +19,7 @@ import { createPgliteDb, migrate, type Db } from "./db/db";
 import { createApp } from "./api/app";
 import { SESSION_DAYS, createSession, createUser, sessionCookieName } from "./api/auth";
 import { clientIp } from "./http";
+import type { OrderNotifier } from "./orders";
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -41,7 +42,9 @@ async function openDevDb(): Promise<Db> {
 // не должны пересоздаваться на каждый запрос
 let handler: Promise<Handler> | null = null;
 
-export function getDevHandler(opts: { autologin: boolean }): Promise<Handler> {
+type DevOptions = { autologin: boolean; orderNotifier: OrderNotifier | null };
+
+export function getDevHandler(opts: DevOptions): Promise<Handler> {
   handler ??= buildDevHandler(opts);
   handler.catch(() => {
     handler = null;
@@ -49,7 +52,7 @@ export function getDevHandler(opts: { autologin: boolean }): Promise<Handler> {
   return handler;
 }
 
-async function buildDevHandler(opts: { autologin: boolean }): Promise<Handler> {
+async function buildDevHandler(opts: DevOptions): Promise<Handler> {
   if (!g.__webikDevDb) {
     g.__webikDevDb = openDevDb();
     // Упавшую инициализацию не запоминаем — следующий запрос попробует снова
@@ -76,6 +79,11 @@ async function buildDevHandler(opts: { autologin: boolean }): Promise<Handler> {
       return c.redirect("/admin");
     });
   }
-  root.route("/", createApp({ db, secureCookies: false, clientIp: (c) => clientIp(c, () => false) }));
+  root.route("/", createApp({
+    db,
+    secureCookies: false,
+    clientIp: (c) => clientIp(c, () => false),
+    orderNotifier: opts.orderNotifier,
+  }));
   return getRequestListener(root.fetch) as Handler;
 }
