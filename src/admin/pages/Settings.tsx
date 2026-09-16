@@ -66,6 +66,12 @@ function CategoryEditor({ type, title }: { type: CategoryType; title: string }) 
   );
 }
 
+/** Число из поля ввода: запятая как разделитель, мусор и минус → 0. */
+function num(input: string): number {
+  const n = parseFloat(input.replace(",", "."));
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
 export default function Settings() {
   const { settings, loading, error, update } = useSettings();
   const { getGoal, setGoal } = useGoals();
@@ -73,20 +79,28 @@ export default function Settings() {
 
   // Локальные значения настроек
   const [taxRate, setTaxRate] = useState("6");
+  const [taxReducedRate, setTaxReducedRate] = useState("4");
+  const [taxDeduction, setTaxDeduction] = useState(0);
   const [defaultGoal, setDefaultGoal] = useState(0);
   const [savedNote, setSavedNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (settings) {
       setTaxRate(String(settings.tax_rate));
+      setTaxReducedRate(String(settings.tax_reduced_rate));
+      setTaxDeduction(settings.tax_deduction_start);
       setDefaultGoal(settings.default_monthly_goal ?? 0);
     }
   }, [settings]);
 
   async function saveSettings() {
-    const rate = parseFloat(taxRate.replace(",", "."));
+    const rate = num(taxRate);
+    const reduced = num(taxReducedRate);
     const res = await update({
-      tax_rate: Number.isFinite(rate) && rate >= 0 ? rate : 0,
+      tax_rate: rate,
+      // Льготная ставка не может быть выше полной — иначе вычет ничего не даёт.
+      tax_reduced_rate: Math.min(reduced, rate),
+      tax_deduction_start: taxDeduction > 0 ? taxDeduction : 0,
       default_monthly_goal: defaultGoal > 0 ? defaultGoal : null,
     });
     setSavedNote(res.error ? `Ошибка: ${res.error}` : "Сохранено");
@@ -129,7 +143,7 @@ export default function Settings() {
         <h2 className="mb-3 font-display text-base font-semibold">Налог и цель по умолчанию</h2>
         <div className="space-y-3">
           <div>
-            <label className={labelCls}>Ставка налога, %</label>
+            <label className={labelCls}>Полная ставка налога, %</label>
             <input
               type="number"
               min={0}
@@ -139,7 +153,33 @@ export default function Settings() {
               className={`${inputCls} mt-1`}
             />
             <p className="mt-1 text-xs text-zinc-500">
-              Резерв на налог = ставка% от полученного дохода за период.
+              НПД: 6% с дохода от юрлиц и ИП, 4% — от физлиц.
+            </p>
+          </div>
+          <div>
+            <label className={labelCls}>Ставка с вычетом, %</label>
+            <input
+              type="number"
+              min={0}
+              step="0.1"
+              value={taxReducedRate}
+              onChange={(e) => setTaxReducedRate(e.target.value)}
+              className={`${inputCls} mt-1`}
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              Пока не израсходован вычет: 4% вместо 6% (юрлица) или 3% вместо 4% (физлица).
+            </p>
+          </div>
+          <div>
+            <label className={labelCls}>Остаток налогового вычета, ₽</label>
+            <div className="mt-1">
+              <MoneyInput value={taxDeduction} onChange={setTaxDeduction} placeholder="10 000" />
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">
+              Вычет даётся один раз на всё время работы, а не каждый год. Здесь — остаток
+              до самого раннего дохода, заведённого в админку; дальше он списывается сам,
+              по разнице между ставками. Сверить можно в «Мой налог». 0 — считать по полной
+              ставке.
             </p>
           </div>
           <div>

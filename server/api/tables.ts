@@ -46,8 +46,8 @@ export const TABLES: Record<string, TableSpec> = {
     conflictTargets: [["user_id", "year", "month"]],
   },
   settings: {
-    columns: [...base, "tax_rate", "default_monthly_goal"],
-    writable: ["tax_rate", "default_monthly_goal"],
+    columns: [...base, "tax_rate", "tax_reduced_rate", "tax_deduction_start", "default_monthly_goal"],
+    writable: ["tax_rate", "tax_reduced_rate", "tax_deduction_start", "default_monthly_goal"],
     conflictTargets: [["user_id"]],
   },
   leads: {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Income } from "./types";
-import { remainingToPay, isOverdue, taxReserve, normalizePaidAmount } from "./finance";
+import { remainingToPay, isOverdue, taxReserve, taxWithDeduction, normalizePaidAmount } from "./finance";
 
 const inc = (p: Partial<Income>): Income => ({
   id: "1", user_id: "u", amount: 1000, date: "2026-06-01", category: "Веб",
@@ -35,6 +35,68 @@ describe("isOverdue", () => {
 describe("taxReserve", () => {
   it("ставка% от суммы полученного (paid_amount)", () => {
     expect(taxReserve(50000, 6)).toBe(3000);
+  });
+});
+
+describe("taxWithDeduction", () => {
+  const ur = { fullRatePercent: 6, reducedRatePercent: 4 }; // доход от юрлиц
+  const fl = { fullRatePercent: 4, reducedRatePercent: 3 }; // доход от физлиц
+
+  it("вычета хватает — платим по льготной ставке", () => {
+    const r = taxWithDeduction(100000, ur, 10000);
+    expect(r.tax).toBe(4000);
+    expect(r.deductionUsed).toBe(2000);
+    expect(r.deductionLeft).toBe(8000);
+    expect(r.effectiveRatePercent).toBe(4);
+  });
+
+  it("вычет исчерпан — полная ставка", () => {
+    const r = taxWithDeduction(100000, ur, 0);
+    expect(r.tax).toBe(6000);
+    expect(r.deductionUsed).toBe(0);
+    expect(r.deductionLeft).toBe(0);
+    expect(r.effectiveRatePercent).toBe(6);
+  });
+
+  it("вычет кончается внутри периода — ставка между льготной и полной", () => {
+    // 10 000 вычета хватает на 500 000 дохода; на 600 000 остаток не покрывает всё
+    const r = taxWithDeduction(600000, ur, 10000);
+    expect(r.tax).toBe(36000 - 10000);
+    expect(r.deductionUsed).toBe(10000);
+    expect(r.deductionLeft).toBe(0);
+    expect(r.effectiveRatePercent).toBeCloseTo(4.33, 2);
+  });
+
+  it("ровно 500 000 от юрлиц выбирают вычет полностью", () => {
+    const r = taxWithDeduction(500000, ur, 10000);
+    expect(r.deductionLeft).toBe(0);
+    expect(r.tax).toBe(20000);
+  });
+
+  it("доход от физлиц: вычет идёт по 1 п.п.", () => {
+    const r = taxWithDeduction(100000, fl, 10000);
+    expect(r.tax).toBe(3000);
+    expect(r.deductionUsed).toBe(1000);
+    expect(r.deductionLeft).toBe(9000);
+  });
+
+  it("нулевой доход не тратит вычет", () => {
+    const r = taxWithDeduction(0, ur, 10000);
+    expect(r.tax).toBe(0);
+    expect(r.deductionUsed).toBe(0);
+    expect(r.deductionLeft).toBe(10000);
+    expect(r.effectiveRatePercent).toBe(4);
+  });
+
+  it("льготная ставка выше полной — считаем по полной, вычет не тратится", () => {
+    const r = taxWithDeduction(100000, { fullRatePercent: 6, reducedRatePercent: 9 }, 10000);
+    expect(r.tax).toBe(6000);
+    expect(r.deductionUsed).toBe(0);
+    expect(r.deductionLeft).toBe(10000);
+  });
+
+  it("отрицательные значения не ломают расчёт", () => {
+    expect(taxWithDeduction(-5000, ur, -100).tax).toBe(0);
   });
 });
 

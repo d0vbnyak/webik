@@ -17,7 +17,7 @@ const json = (r: Response): Promise<any> => r.json(); // eslint-disable-line @ty
 
 beforeAll(async () => {
   db = await createPgliteDb();
-  expect(await migrate(db)).toEqual(["001_init.sql", "002_auth_hardening.sql", "003_totp_lock.sql"]);
+  expect(await migrate(db)).toEqual(["001_init.sql", "002_auth_hardening.sql", "003_totp_lock.sql", "004_tax_deduction.sql"]);
   expect(await migrate(db)).toEqual([]); // повторный прогон ничего не делает
   await createUser(db, "Sergey@Example.com", PASS);
   await createUser(db, "other@example.com", PASS);
@@ -391,6 +391,40 @@ describe("/api/db", () => {
     await post("/db", { table: "leads", action: "delete", filters: [{ column: "id", op: "eq", value: id }] }, cookie);
     const after = await post("/db", { table: "leads", action: "select", filters: [{ column: "id", op: "eq", value: id }] }, cookie);
     expect((await json(after)).data).toEqual([]);
+  });
+
+  it("настройки налога: upsert с дефолтами и правка ставок и вычета", async () => {
+    const cookie = await signIn("sergey@example.com");
+    const ins = await post(
+      "/db",
+      {
+        table: "settings",
+        action: "upsert",
+        columns: "*",
+        values: { tax_rate: 6, tax_reduced_rate: 4, tax_deduction_start: 10000, default_monthly_goal: null },
+        onConflict: "user_id",
+        ignoreDuplicates: true,
+      },
+      cookie,
+    );
+    expect(ins.status).toBe(200);
+
+    const read = await post("/db", { table: "settings", action: "select", columns: "*" }, cookie);
+    const row = (await json(read)).data[0];
+    expect(row).toMatchObject({ tax_rate: 6, tax_reduced_rate: 4, tax_deduction_start: 10000 });
+
+    const upd = await post(
+      "/db",
+      {
+        table: "settings",
+        action: "update",
+        columns: "*",
+        values: { tax_reduced_rate: 3, tax_deduction_start: 2500 },
+        filters: [{ column: "id", op: "eq", value: row.id }],
+      },
+      cookie,
+    );
+    expect((await json(upd)).data[0]).toMatchObject({ tax_reduced_rate: 3, tax_deduction_start: 2500 });
   });
 
   it("чужие строки не видны, не меняются и не удаляются", async () => {

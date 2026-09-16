@@ -7,9 +7,10 @@ import { useSettings } from "../hooks/useSettings";
 import { useGoals } from "../hooks/useGoals";
 import { useRecurring } from "../hooks/useRecurring";
 import { useLeads } from "../hooks/useLeads";
+import { useReceivedBefore } from "../hooks/useReceivedBefore";
 import { dueToday, pluralDeals } from "../lib/crm";
 import { formatMoney, formatDate, monthLabel, todayISO } from "../lib/dates";
-import { remainingToPay, isOverdue, taxReserve } from "../lib/finance";
+import { remainingToPay, isOverdue, taxWithDeduction } from "../lib/finance";
 import { shouldRemind, daysUntil } from "../lib/recurring";
 import MonthSwitcher from "../components/MonthSwitcher";
 import StatCard from "../components/StatCard";
@@ -27,6 +28,7 @@ export default function Dashboard() {
   const { getGoal } = useGoals();
   const { recurring } = useRecurring();
   const leadsHook = useLeads();
+  const receivedBefore = useReceivedBefore(year, month);
 
   const loading = incomesHook.loading || expensesHook.loading;
 
@@ -34,8 +36,15 @@ export default function Dashboard() {
   const received = incomesHook.incomes.reduce((s, i) => s + i.paid_amount, 0);
   const monthExpenses = expensesHook.total;
   const profit = monthIncome - monthExpenses;
-  const taxRate = settings?.tax_rate ?? 6;
-  const tax = taxReserve(received, taxRate);
+  // Вычет даётся один раз на всё время, поэтому его остаток на начало месяца
+  // считаем по всей прошлой истории доходов, а не по текущему периоду.
+  const taxRates = {
+    fullRatePercent: settings?.tax_rate ?? 6,
+    reducedRatePercent: settings?.tax_reduced_rate ?? 4,
+  };
+  const deductionStart = settings?.tax_deduction_start ?? 0;
+  const deductionLeftNow = taxWithDeduction(receivedBefore.received, taxRates, deductionStart).deductionLeft;
+  const monthTax = taxWithDeduction(received, taxRates, deductionLeftNow);
   const receivablesTotal = receivables.items.reduce((s, i) => s + remainingToPay(i), 0);
   const goal = getGoal(year, month)?.target_amount ?? settings?.default_monthly_goal ?? 0;
 
@@ -69,7 +78,19 @@ export default function Dashboard() {
             <StatCard label="Дебиторка" amount={receivablesTotal} tone={receivablesTotal > 0 ? "text-amber-400" : undefined} />
             <StatCard label="Расход за месяц" amount={monthExpenses} />
             <StatCard label="Прибыль" amount={profit} tone={profit >= 0 ? "text-brand-green" : "text-red-400"} />
-            <StatCard label={`На налог (${taxRate}%)`} amount={tax} hint="отложить с полученного" />
+            <StatCard
+              label={`На налог (${monthTax.effectiveRatePercent}%)`}
+              amount={monthTax.tax}
+              hint={
+                receivedBefore.loading
+                  ? "отложить с полученного"
+                  : monthTax.deductionLeft > 0
+                    ? `вычета осталось ${formatMoney(monthTax.deductionLeft)}`
+                    : deductionStart > 0
+                      ? "вычет израсходован"
+                      : "отложить с полученного"
+              }
+            />
           </div>
 
           <Link to="/admin/crm" className="block">

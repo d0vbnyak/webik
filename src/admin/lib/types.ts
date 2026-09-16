@@ -68,7 +68,9 @@ export interface Goal {
 export interface Settings {
   id: string;
   user_id: string;
-  tax_rate: number; // %
+  tax_rate: number; // полная ставка, %
+  tax_reduced_rate: number; // ставка, пока не израсходован вычет, %
+  tax_deduction_start: number; // остаток вычета на начало учёта, ₽
   default_monthly_goal: number | null;
 }
 

@@ -29,10 +29,13 @@ export function useSettings() {
       setLoading(false);
       return;
     }
-    // Строки нет — создаём дефолтную (tax_rate = 6)
+    // Строки нет — создаём дефолтную: НПД с юрлицами, вычет не израсходован
     const { error: upErr } = await db
       .from("settings")
-      .upsert({ tax_rate: 6, default_monthly_goal: null }, { onConflict: "user_id", ignoreDuplicates: true });
+      .upsert(
+        { tax_rate: 6, tax_reduced_rate: 4, tax_deduction_start: 10000, default_monthly_goal: null },
+        { onConflict: "user_id", ignoreDuplicates: true },
+      );
     if (upErr) {
       setError(upErr.message);
       setLoading(false);
@@ -53,7 +56,11 @@ export function useSettings() {
   }, [load]);
 
   const update = useCallback(
-    async (patch: Partial<Pick<Settings, "tax_rate" | "default_monthly_goal">>) => {
+    async (
+      patch: Partial<
+        Pick<Settings, "tax_rate" | "tax_reduced_rate" | "tax_deduction_start" | "default_monthly_goal">
+      >,
+    ) => {
       if (!settings) return { error: "Настройки ещё не загружены" };
       const { data, error: updErr } = await db
         .from("settings")
