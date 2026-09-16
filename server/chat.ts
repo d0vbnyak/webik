@@ -348,6 +348,7 @@ async function runTurn(
     timeout: 45_000,
     maxRetries: 1,
   });
+  /** Тексты хода без вызова инструмента — склеиваются в ответ */
   const texts: string[] = [];
   /** Текст, которым закончился ход: его видит посетитель, если был вызов инструмента */
   let finalText = "";
@@ -400,7 +401,6 @@ async function runTurn(
 
     if (calls.length > 0) {
       usedTool = true;
-      if (text) texts.push(text);
       // Реплика модели вместе с вызовами: без них API не примет результат
       // инструмента на следующем круге.
       session.messages.push({ role: "assistant", content: text || null, tool_calls: calls });
