@@ -65,7 +65,7 @@ Node.js ставился через winget: если сессия не види�
 `export PATH="$PATH:/c/Program Files/nodejs"`.
 
 Выкладка на https://webik.tech — `bash deploy/deploy.sh` (в PowerShell:
-`& "C:\Program Files\Gitinash.exe" deploy/deploy.sh`). Из агента выкладка
+`& "C:\Program Files\Git\bin\bash.exe" deploy/deploy.sh`). Из агента выкладка
 заблокирована классификатором прав — её запускает Сергей. Скрипт сам проверяет, что в
 сборке нет ключей Anthropic, Yandex Cloud и токена Telegram.
 
