@@ -17,7 +17,7 @@ const json = (r: Response): Promise<any> => r.json(); // eslint-disable-line @ty
 
 beforeAll(async () => {
   db = await createPgliteDb();
-  expect(await migrate(db)).toEqual(["001_init.sql", "002_auth_hardening.sql", "003_totp_lock.sql", "004_tax_deduction.sql"]);
+  expect(await migrate(db)).toEqual(["001_init.sql", "002_auth_hardening.sql", "003_totp_lock.sql", "004_tax_deduction.sql", "005_tax_constraints.sql"]);
   expect(await migrate(db)).toEqual([]); // повторный прогон ничего не делает
   await createUser(db, "Sergey@Example.com", PASS);
   await createUser(db, "other@example.com", PASS);

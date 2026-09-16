@@ -83,6 +83,7 @@ export default function Settings() {
   const [taxDeduction, setTaxDeduction] = useState(0);
   const [defaultGoal, setDefaultGoal] = useState(0);
   const [savedNote, setSavedNote] = useState<string | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   useEffect(() => {
     if (settings) {
@@ -106,6 +107,7 @@ export default function Settings() {
             ? "Ставка с вычетом не может быть выше полной"
             : null;
     if (problem) {
+      setSaveFailed(true);
       setSavedNote(problem);
       setTimeout(() => setSavedNote(null), 4000);
       return;
@@ -116,6 +118,7 @@ export default function Settings() {
       tax_deduction_start: taxDeduction > 0 ? taxDeduction : 0,
       default_monthly_goal: defaultGoal > 0 ? defaultGoal : null,
     });
+    setSaveFailed(Boolean(res.error));
     setSavedNote(res.error ? `Ошибка: ${res.error}` : "Сохранено");
     setTimeout(() => setSavedNote(null), 2500);
   }
@@ -209,7 +212,9 @@ export default function Settings() {
             <button type="button" onClick={() => void saveSettings()} className={btnPrimary}>
               Сохранить
             </button>
-            {savedNote && <span className="text-sm text-zinc-400">{savedNote}</span>}
+            {savedNote && (
+              <span className={`text-sm ${saveFailed ? "text-red-400" : "text-zinc-400"}`}>{savedNote}</span>
+            )}
           </div>
         </div>
       </Card>
