@@ -1,9 +1,11 @@
 /**
  * Обработчик /api/chat — единственное место, где сайт зовёт модель.
  *
- * Живёт на сервере: ключ от Anthropic в браузер не уходит. Подключается как
- * middleware к dev-серверу Vite (см. vite.config.ts). В проде выключен —
- * Anthropic API не обслуживает Россию (см. server/main.ts).
+ * Живёт на сервере: ключ в браузер не уходит. Модель — Yandex AI Studio через
+ * OpenAI-совместимый API (Anthropic не обслуживает Россию, а сервер в РФ).
+ * Подключается к dev-серверу Vite (vite.config.ts) и к прод-серверу
+ * (server/main.ts) — в обоих случаях, только если заданы YANDEX_API_KEY и
+ * YANDEX_FOLDER_ID. Без них виджет показывает форму заявки.
  *
  *   GET  /api/chat  → { enabled, orders } — виджет решает: чат, форма заявки или контакты
  *   POST /api/chat  { sessionId, message } → { sessionId, reply, orderSent }
@@ -21,9 +23,10 @@
  *    цены, это главный риск.
  * 2. **Лимиты считаются по адресу сокета.** Заголовку X-Forwarded-For верить
  *    нельзя: он подделывается одной строкой, и лимит на посетителя обходится
- *    случайным адресом в каждом запросе.
+ *    случайным адресом в каждом запросе. Исключение — прод за Caddy: там
+ *    server/main.ts передаёт адрес, взятый из заголовка только от своего прокси.
  */
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
@@ -33,19 +36,25 @@ import { HISTORY_MAX_MESSAGES, MESSAGE_MAX_CHARS } from "../shared/chat";
 import { CONTACT_EMAIL, TELEGRAM_HANDLE } from "../shared/contacts";
 import { validateOrder } from "../shared/order";
 
-/**
- * Sonnet, а не Opus, как в соседних проектах: вопросы посетителей простые,
- * а чат на публичной странице — самая массовая точка расхода.
- */
-const MODEL = "claude-sonnet-5";
+/** OpenAI-совместимый адрес Yandex AI Studio. */
+const BASE_URL = "https://ai.api.cloud.yandex.net/v1";
 
 /**
- * Запас по токенам. У Sonnet 5 размышления включены по умолчанию и тратят
- * тот же бюджет, что и ответ, поэтому тесного лимита тут быть не должно:
- * иначе ответ обрывается на полуслове, а на «задумчивом» вопросе текста не
- * остаётся вовсе.
+ * Модель чата. Выбрана замером сценариев на этом обработчике
+ * (server/cli/chat-eval.ts, итоги — docs/chat-bot.md): заявку отправляла
+ * надёжнее всех, самая дешёвая — около 0,45 ₽ за реплику с НДС благодаря
+ * дешёвому кэшу базы знаний. Отвечает за 4–6 секунд.
+ * Полный идентификатор модели включает каталог: gpt://<каталог>/<модель>.
  */
-const MAX_TOKENS = 2000;
+export const DEFAULT_MODEL = "deepseek-v4-flash";
+
+/**
+ * Запас по токенам. Модели Яндекса рассуждают перед ответом и тратят на это
+ * тот же бюджет, поэтому тесного лимита тут быть не должно: иначе ответ
+ * обрывается на полуслове. На замере qwen3.6 тратила на рассуждения около
+ * 2 000 токенов, и при прежнем лимите в 2 000 ответ обрывался.
+ */
+const MAX_TOKENS = 4000;
 
 /** Лимиты. Подобраны под демо-сайт: живому человеку хватает, скрипту — нет. */
 const LIMITS = {
@@ -65,41 +74,65 @@ const LIMITS = {
   toolRounds: 3,
 } as const;
 
+const ORDER_TOOL_NAME = "send_order";
+
 /**
- * Инструмент отправки заявки. strict: модель не пришлёт поле не того типа.
- * Все поля — обязательные строки, пустая строка вместо null (см. CLAUDE.md про схемы).
+ * Инструмент отправки заявки. Все поля — обязательные строки, пустая строка
+ * вместо null. Типы и обязательность аргументов модель соблюдает не всегда,
+ * поэтому они всё равно проверяются в коде (validateOrder).
  */
-const ORDER_TOOL: Anthropic.Tool = {
-  name: "send_order",
-  description:
-    "Передаёт заявку посетителя владельцу студии. Вызывай, когда посетитель " +
-    "хочет заказать услугу или обсудить проект, и в диалоге уже есть контакт для связи " +
-    "(телефон, почта или Telegram) и суть задачи. Без контакта не вызывай — сначала спроси его. " +
-    "Одну и ту же заявку повторно не отправляй.",
-  strict: true,
-  input_schema: {
-    type: "object",
-    properties: {
-      name: { type: "string", description: "Как обращаться к посетителю. Пустая строка, если не назвался." },
-      contact: { type: "string", description: "Телефон, почта или Telegram — как написал посетитель." },
-      task: { type: "string", description: "Суть задачи своими словами, 1–3 предложения." },
-      details: {
-        type: "string",
-        description: "Бюджет, сроки, ниша, сайт компании — если прозвучали. Иначе пустая строка.",
+const ORDER_TOOL: OpenAI.Chat.Completions.ChatCompletionFunctionTool = {
+  type: "function",
+  function: {
+    name: ORDER_TOOL_NAME,
+    description:
+      "Передаёт заявку посетителя владельцу студии. Вызывай, когда посетитель " +
+      "хочет заказать услугу или обсудить проект, и в диалоге уже есть контакт для связи " +
+      "(телефон, почта или Telegram) и суть задачи. Без контакта не вызывай — сначала спроси его. " +
+      "Одну и ту же заявку повторно не отправляй.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Как обращаться к посетителю. Пустая строка, если не назвался." },
+        contact: { type: "string", description: "Телефон, почта или Telegram — как написал посетитель." },
+        task: { type: "string", description: "Суть задачи своими словами, 1–3 предложения." },
+        details: {
+          type: "string",
+          description: "Бюджет, сроки, ниша, сайт компании — если прозвучали. Иначе пустая строка.",
+        },
       },
+      required: ["name", "contact", "task", "details"],
+      additionalProperties: false,
     },
-    required: ["name", "contact", "task", "details"],
-    additionalProperties: false,
   },
 };
 
-type Session = { messages: Anthropic.MessageParam[]; touched: number; ordersSent: number };
+type Message = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+type Session = { messages: Message[]; touched: number; ordersSent: number };
+
+/** Доступ к Yandex AI Studio: API-ключ сервисного аккаунта и каталог. */
+export type YandexAccess = { apiKey: string; folderId: string };
 
 export type ChatOptions = {
-  apiKey: string | undefined;
+  /** null — чат выключен, виджет показывает форму заявки */
+  yandex: YandexAccess | null;
   orderSaver: OrderSaver | null;
   orderNotifier: OrderNotifier | null;
+  /** Адрес посетителя. По умолчанию — адрес сокета; за прокси передать свой. */
+  clientIp?: (req: IncomingMessage) => string;
+  /** Модель без каталога. По умолчанию DEFAULT_MODEL — поле для замеров. */
+  model?: string;
 };
+
+/**
+ * Доступ из переменных окружения. Нужны обе: без каталога запрос не собрать.
+ * Идентификатор каталога начинается с b1g — это не id сервисного аккаунта.
+ */
+export function yandexFromEnv(env: Record<string, string | undefined>): YandexAccess | null {
+  const apiKey = env.YANDEX_API_KEY?.trim();
+  const folderId = env.YANDEX_FOLDER_ID?.trim();
+  return apiKey && folderId ? { apiKey, folderId } : null;
+}
 
 /** Состояние в памяти процесса: перезапуск сервера его обнуляет. */
 const ipHits = new Map<string, number[]>();
@@ -164,11 +197,11 @@ function sweep(): void {
 }
 
 /**
- * Адрес посетителя. Берём адрес сокета: X-Forwarded-For подделывается, а
+ * Адрес посетителя по умолчанию — адрес сокета: X-Forwarded-For подделывается, а
  * доверять ему можно только когда точно известно, что запрос пришёл от своего
- * прокси. При переносе за прокси — читать заголовок, но лишь от его адреса.
+ * прокси. За прокси (прод) адрес передаётся через ChatOptions.clientIp.
  */
-function clientIp(req: IncomingMessage): string {
+function socketIp(req: IncomingMessage): string {
   return req.socket.remoteAddress ?? "unknown";
 }
 
@@ -204,7 +237,7 @@ function parseBody(body: unknown): Parsed | { error: string } {
  * Обрезает историю до лимита. Начинаться она должна с обычной реплики
  * посетителя: результат инструмента без своего вызова API отвергнет.
  */
-export function trimHistory(messages: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
+export function trimHistory(messages: Message[]): Message[] {
   let out = messages.slice(-HISTORY_MAX_MESSAGES);
   while (out.length > 0 && !(out[0].role === "user" && typeof out[0].content === "string")) {
     out = out.slice(1);
@@ -259,47 +292,79 @@ type Turn = { reply: string; orderSent: boolean; keep: boolean };
 /** Ответ посетителю, когда заявка ушла, а модель не договорила. */
 const ORDER_SENT_REPLY = "Заявку передал — с вами свяжутся по указанному контакту.";
 
+/** Вместо ответа, в котором модель описала вызов инструмента текстом. */
+const LEAKED_TOOL_REPLY =
+  "Чтобы передать заявку, напишите, пожалуйста, одним сообщением: что нужно сделать и как с вами связаться.";
+
+/**
+ * Текст ответа без рассуждений. Некоторые модели платформы присылают их прямо
+ * в тексте, в тегах <think>, — посетителю они не нужны.
+ */
+function visibleText(content: string | null | undefined): string {
+  return (content ?? "").replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trim();
+}
+
+/** Аргументы вызова: строка JSON, которую модель могла и не дописать. */
+function parseArguments(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Один ход диалога: модель отвечает, при необходимости вызывает send_order,
  * получает результат и договаривает. Всё новое дописывается в session.messages
  * по мере продвижения — при сбое после отправки заявки handleChat сохраняет
  * эту рабочую копию, и повторное сообщение не отправит заявку второй раз.
  *
- * Ключ читается из окружения сервера (ANTHROPIC_API_KEY), переменная без
+ * Ключ читается из окружения сервера (YANDEX_API_KEY), переменная без
  * префикса VITE_ — во фронтенд она не попадает.
  */
 async function runTurn(
   session: Session,
   ip: string,
-  opts: { apiKey: string; orderSaver: OrderSaver | null; orderNotifier: OrderNotifier | null },
+  opts: {
+    yandex: YandexAccess;
+    model: string;
+    orderSaver: OrderSaver | null;
+    orderNotifier: OrderNotifier | null;
+  },
 ): Promise<Turn> {
   // Посетитель в окне чата не ждёт по 10 минут (таймаут SDK по умолчанию)
-  const client = new Anthropic({ apiKey: opts.apiKey, timeout: 45_000, maxRetries: 1 });
+  const client = new OpenAI({
+    apiKey: opts.yandex.apiKey,
+    baseURL: BASE_URL,
+    project: opts.yandex.folderId,
+    // По умолчанию Яндекс сохраняет запросы у себя; переписка посетителей — нет.
+    defaultHeaders: { "x-data-logging-enabled": "false" },
+    timeout: 45_000,
+    maxRetries: 1,
+  });
   const texts: string[] = [];
   let orderSent = false;
+  let usedTool = false;
 
   for (let round = 0; round < LIMITS.toolRounds; round++) {
-    const response = await client.messages.create({
-      model: MODEL,
+    const response = await client.chat.completions.create({
+      model: `gpt://${opts.yandex.folderId}/${opts.model}`,
       max_tokens: MAX_TOKENS,
+      // Вопросы посетителей простые, глубокие рассуждения тут не окупаются,
+      // а посетитель ждёт ответа в окне чата. API Яндекса параметр принимает.
+      reasoning_effort: "low",
       tools: [ORDER_TOOL],
-      // База знаний не меняется от запроса к запросу — держим её в кэше,
-      // чтение из кэша стоит 0.1 от обычного входа.
-      system: [
-        {
-          type: "text",
-          text: SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      // Вопросы посетителей простые, глубокие рассуждения тут не окупаются.
-      output_config: { effort: "medium" },
-      messages: session.messages,
+      // Кэш у Яндекса автоматический: одинаковый префикс (база знаний) кэшируется сам.
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...session.messages],
     });
 
-    if (response.stop_reason === "refusal") {
-      // Классификатор отказал: content пуст, читать его бессмысленно.
-      console.warn("[chat] модель отказалась отвечать:", response.stop_details);
+    const choice = response.choices[0];
+    if (!choice) throw new Error("ответ модели без вариантов");
+    const message = choice.message;
+
+    if (choice.finish_reason === "content_filter" || message.refusal) {
+      // Фильтр отказал: текст ответа читать бессмысленно.
+      console.warn("[chat] модель отказалась отвечать:", message.refusal ?? choice.finish_reason);
       if (orderSent) {
         session.messages.push({ role: "assistant", content: ORDER_SENT_REPLY });
         return { reply: ORDER_SENT_REPLY, orderSent, keep: true };
@@ -312,54 +377,73 @@ async function runTurn(
       };
     }
 
-    const text = response.content
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
-      .join("")
-      .trim();
+    let text = visibleText(message.content);
+    if (text.includes(ORDER_TOOL_NAME)) {
+      // Замер: модель вместо вызова инструмента однажды написала его текстом —
+      // с выдуманным диалогом и JSON заявки. Посетитель такого видеть не должен.
+      console.warn("[chat] модель написала вызов инструмента текстом");
+      text = LEAKED_TOOL_REPLY;
+    }
     if (text) texts.push(text);
 
-    // Ответ модели целиком, с блоками размышлений и вызовов: без них API не
-    // примет результат инструмента на следующем круге.
-    session.messages.push({ role: "assistant", content: response.content });
+    const calls = (message.tool_calls ?? []).filter(
+      (call): call is OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall => call.type === "function",
+    );
 
-    const calls = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    // Реплика модели вместе с вызовами: без них API не примет результат
+    // инструмента на следующем круге.
+    session.messages.push(
+      calls.length > 0
+        ? { role: "assistant", content: text || null, tool_calls: calls }
+        : { role: "assistant", content: text },
+    );
+
+    if (calls.length > 0) usedTool = true;
     if (calls.length === 0) {
-      if (response.stop_reason === "max_tokens") {
+      if (choice.finish_reason === "length") {
         // Ответ обрезан лимитом — честнее сказать об этом, чем оборвать на полуслове.
         texts.push("Ответ получился длинным и оборвался. Спросите, пожалуйста, поконкретнее.");
       }
       break;
     }
 
-    // На каждый вызов — свой результат, все результаты в одном сообщении. Вызов без
+    // На каждый вызов — свой результат, сразу за репликой модели. Вызов без
     // результата в истории API отвергает, и диалог умер бы до конца сессии
-    const truncated = response.stop_reason === "max_tokens";
-    const results: Anthropic.ToolResultBlockParam[] = [];
+    const truncated = choice.finish_reason === "length";
     for (const call of calls) {
+      const input = parseArguments(call.function.arguments);
       const outcome: ToolOutcome = truncated
         ? // Аргументы обрезанного вызова могут быть неполными — не выполняем
           { content: "Вызов оборвался на лимите длины и не выполнен. Повтори его коротко.", isError: true, sent: false }
-        : call.name === ORDER_TOOL.name
-          ? await runOrderTool(call.input, session, ip, { save: opts.orderSaver, notify: opts.orderNotifier })
-          : { content: "Такого инструмента нет.", isError: true, sent: false };
+        : call.function.name !== ORDER_TOOL_NAME
+          ? { content: "Такого инструмента нет.", isError: true, sent: false }
+          : input === null
+            ? { content: "Аргументы вызова — не JSON. Повтори вызов.", isError: true, sent: false }
+            : await runOrderTool(input, session, ip, { save: opts.orderSaver, notify: opts.orderNotifier });
       orderSent ||= outcome.sent;
-      results.push({ type: "tool_result", tool_use_id: call.id, content: outcome.content, is_error: outcome.isError });
+      // У сообщения tool нет флага ошибки, как у Anthropic, — помечаем текстом
+      session.messages.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: outcome.isError ? `Ошибка. ${outcome.content}` : outcome.content,
+      });
     }
-    session.messages.push({ role: "user", content: results });
   }
 
   // Круги кончились на результате инструмента — закрываем ход репликой, чтобы
   // история не обрывалась на полуслове
   const last = session.messages[session.messages.length - 1];
-  if (last.role === "user" && Array.isArray(last.content)) {
+  if (last.role === "tool") {
     const closing = orderSent ? ORDER_SENT_REPLY : "Не получилось оформить заявку. Попробуйте ещё раз.";
     session.messages.push({ role: "assistant", content: closing });
     // Подтверждение отправки посетитель должен увидеть, даже если раньше модель успела написать «сейчас оформлю»
     if (orderSent || !texts.length) texts.push(closing);
   }
 
-  const reply = texts.join("\n\n").trim();
+  // Если был вызов инструмента, посетителю — только итоговая реплика: модели
+  // Яндекса пишут «передаю заявку» до вызова и повторяют то же после него, и
+  // склейка выходила вида «Спасибо, Олег! … Спасибо, Олег! …».
+  const reply = (usedTool ? (texts.at(-1) ?? "") : texts.join("\n\n")).trim();
   if (reply) return { reply, orderSent, keep: true };
 
   console.warn("[chat] пустой ответ модели");
@@ -399,7 +483,7 @@ export async function handleChat(
   opts: ChatOptions,
 ): Promise<void> {
   if (req.method === "GET") {
-    send(res, 200, { enabled: Boolean(opts.apiKey), orders: Boolean(opts.orderSaver || opts.orderNotifier) });
+    send(res, 200, { enabled: Boolean(opts.yandex), orders: Boolean(opts.orderSaver || opts.orderNotifier) });
     return;
   }
   if (req.method !== "POST") {
@@ -407,13 +491,13 @@ export async function handleChat(
     return;
   }
 
-  const apiKey = opts.apiKey;
-  if (!apiKey) {
+  const yandex = opts.yandex;
+  if (!yandex) {
     // Внятная ошибка вместо падения в недрах SDK.
     send(res, 503, {
       error:
-        "На сервере не задан ANTHROPIC_API_KEY — чат отключён. " +
-        "Добавьте ключ в .env (без префикса VITE_) и перезапустите dev-сервер.",
+        "На сервере не заданы YANDEX_API_KEY и YANDEX_FOLDER_ID — чат отключён. " +
+        "Добавьте их в .env (без префикса VITE_) и перезапустите сервер.",
     });
     return;
   }
@@ -438,7 +522,7 @@ export async function handleChat(
     return;
   }
 
-  const ip = clientIp(req);
+  const ip = (opts.clientIp ?? socketIp)(req);
   const limited = checkLimits(ip);
   if (limited) {
     send(res, 429, { error: limited });
@@ -468,7 +552,12 @@ export async function handleChat(
   };
 
   try {
-    const turn = await runTurn(session, ip, { apiKey, orderSaver: opts.orderSaver, orderNotifier: opts.orderNotifier });
+    const turn = await runTurn(session, ip, {
+      yandex,
+      model: opts.model ?? DEFAULT_MODEL,
+      orderSaver: opts.orderSaver,
+      orderNotifier: opts.orderNotifier,
+    });
     if (turn.keep) save();
     dayCount += 1;
 
@@ -489,7 +578,7 @@ export async function handleChat(
 
     // История, которую API не принимает, не лечится повтором — начинаем диалог заново
     // Счётчик заявок сохраняем: иначе сброс открыл бы путь ко второй заявке
-    if (e instanceof Anthropic.BadRequestError && stored) {
+    if (e instanceof OpenAI.BadRequestError && stored) {
       sessions.set(sessionId, { messages: [], touched: Date.now(), ordersSent: stored.ordersSent });
     }
 

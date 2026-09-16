@@ -9,8 +9,9 @@
 # (docker network create --internal webik_edge): так ни `down` у WebIK, ни порядок
 # запуска не уронят Caddy второго бизнеса. --internal — через эту сеть наружу не выйти.
 #
-# Выход в интернет у приложения один — сеть egress, ради писем о заявках (SMTP).
-# Он не ограничен одним адресом; база в эту сеть не входит.
+# Выход в интернет у приложения один — сеть egress: письма о заявках (SMTP) и
+# запросы к модели ИИ-ассистента (Yandex AI Studio, HTTPS). Он не ограничен
+# одним адресом; база в эту сеть не входит.
 #
 # Запуск на сервере (из /opt/webik):  docker compose up -d --build
 # Секреты — в /opt/webik/.env (права 600), см. deploy/README.md.
@@ -68,6 +69,9 @@ services:
       SMTP_USER: ${SMTP_USER:-dev.d0vbnyak@gmail.com}
       SMTP_PASS: ${SMTP_PASS:-}
       ORDER_EMAIL_TO: ${ORDER_EMAIL_TO:-dev.d0vbnyak@gmail.com}
+      # ИИ-ассистент на сайте. Включается, когда в .env заданы обе переменные
+      YANDEX_API_KEY: ${YANDEX_API_KEY:-}
+      YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-}
     networks:
       internal: {}
       egress: {}

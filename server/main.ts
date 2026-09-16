@@ -11,20 +11,21 @@
  *   SMTP_PASS …         письмо о каждой заявке с сайта (переменные — в server/orders.ts)
  *   TELEGRAM_BOT_TOKEN  то же в Telegram (с Timeweb не работает, см. server/orders.ts)
  *   TELEGRAM_CHAT_ID    Ничего не задано — заявки идут только в CRM
- *
- * Чат сайта (/api/chat) здесь не подключён: Anthropic API не обслуживает Россию,
- * в проде чат вернётся вместе с российской моделью. Пока его нет, виджет
- * ассистента показывает форму заявки (POST /api/order), заявки падают в CRM.
+ *   YANDEX_API_KEY      ИИ-ассистент на сайте (Yandex AI Studio, server/chat.ts).
+ *   YANDEX_FOLDER_ID    Нужны обе. Не заданы — чат выключен, и виджет
+ *                       ассистента показывает форму заявки (POST /api/order).
  */
 import { Hono } from "hono";
 import { serve, type HttpBindings } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
+import { RESPONSE_ALREADY_SENT } from "@hono/node-server/utils/response";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createPgDb, migrate } from "./db/db";
 import { createApp } from "./api/app";
 import { clientIp, trustedProxyByHost } from "./http";
-import { notifiersFromEnv } from "./orders";
+import { handleChat, yandexFromEnv } from "./chat";
+import { crmOrderSaver, notifiersFromEnv } from "./orders";
 
 process.on("unhandledRejection", (e) => {
   console.error("[webik] необработанная ошибка:", (e as Error)?.message ?? e);
@@ -41,6 +42,8 @@ const secureCookies = env.SECURE_COOKIES !== "0";
 const isTrustedProxy = trustedProxyByHost(env.TRUSTED_PROXY_HOST);
 const orderNotifier = notifiersFromEnv(env);
 if (!orderNotifier) console.warn("[webik] SMTP_PASS не задан — уведомлений о заявках нет, только CRM");
+const yandex = yandexFromEnv(env);
+if (!yandex) console.warn("[webik] YANDEX_API_KEY или YANDEX_FOLDER_ID не заданы — чат выключен, в виджете форма заявки");
 
 const db = await createPgDb(env.DATABASE_URL);
 const applied = await migrate(db);
@@ -77,14 +80,31 @@ root.get("/healthz", async (c) => {
   return c.text("ok");
 });
 
-// Чат в проде выключен (см. шапку файла): виджет спрашивает GET и показывает форму заявки.
-// На POST — понятный ответ вместо «Запрос отклонён» (демо-чат на «Возможностях»)
-// orders: принимаются ли заявки. Нет — виджет сразу показывает контакты вместо формы.
-// Заявки пишутся в CRM этой же базы, так что приём есть всегда
-root.get("/api/chat", (c) => c.json({ enabled: false, orders: true }));
-root.post("/api/chat", (c) =>
-  c.json({ error: "ИИ-ассистент временно отдыхает. Оставьте заявку в окне справа внизу — ответим сами." }, 503),
-);
+if (yandex) {
+  // Чат работает с Node-запросом напрямую (он же подключён к dev-серверу Vite),
+  // поэтому отвечает сам, а Hono сообщаем, что ответ уже отправлен.
+  // Адрес посетителя — через доверенный прокси, как у входа в админку: иначе
+  // все посетители делили бы один лимит на адрес Caddy.
+  const orderSaver = crmOrderSaver(db);
+  root.on(["GET", "POST"], "/api/chat", async (c) => {
+    await handleChat(c.env.incoming, c.env.outgoing, {
+      yandex,
+      orderSaver,
+      orderNotifier,
+      clientIp: () => clientIp(c, isTrustedProxy),
+    });
+    return RESPONSE_ALREADY_SENT;
+  });
+} else {
+  // Чат выключен: виджет спрашивает GET и показывает форму заявки.
+  // На POST — понятный ответ вместо «Запрос отклонён» (демо-чат на «Возможностях»)
+  // orders: принимаются ли заявки. Нет — виджет сразу показывает контакты вместо формы.
+  // Заявки пишутся в CRM этой же базы, так что приём есть всегда
+  root.get("/api/chat", (c) => c.json({ enabled: false, orders: true }));
+  root.post("/api/chat", (c) =>
+    c.json({ error: "ИИ-ассистент временно отдыхает. Оставьте заявку в окне справа внизу — ответим сами." }, 503),
+  );
+}
 
 root.route("/", createApp({ db, secureCookies, clientIp: (c) => clientIp(c, isTrustedProxy), orderNotifier }));
 

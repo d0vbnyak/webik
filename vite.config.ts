@@ -10,8 +10,9 @@ import { crmOrderSaver, notifiersFromEnv } from "./server/orders";
  * попадают: loadEnv с пустым префиксом отдаёт все переменные из .env и
  * окружения, а в браузер Vite подставляет только те, что начинаются на VITE_.
  *
- * Работает только в `npm run dev`. В проде (server/main.ts) чат выключен:
- * Anthropic API не обслуживает Россию.
+ * Модель — Yandex AI Studio: нужны YANDEX_API_KEY и YANDEX_FOLDER_ID в .env или
+ * в окружении. Без них виджет показывает форму заявки. В проде чат подключает
+ * server/main.ts по тем же переменным.
  */
 function chatApi(mode: string): Plugin {
   const env = loadEnv(mode, process.cwd(), "");
@@ -27,7 +28,7 @@ function chatApi(mode: string): Plugin {
         Promise.all([server.ssrLoadModule("/server/chat.ts"), server.ssrLoadModule("/server/dev.ts")])
           .then(async ([chat, dev]) =>
             chat.handleChat(req, res, {
-              apiKey: env.ANTHROPIC_API_KEY,
+              yandex: chat.yandexFromEnv(env),
               orderSaver: crmOrderSaver(await dev.getDevDb()),
               orderNotifier: notifiersFromEnv(env),
             }),
