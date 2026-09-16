@@ -2,11 +2,14 @@ import { useState, type FormEvent } from "react";
 import { motion } from "motion/react";
 import { openAssistant } from "./assistant/events";
 
+// Размер задан в em, а не в пикселях по брейкпоинтам: пропорция овала (0.97 : 0.53)
+// и точка внутри держатся одинаковыми на любой ширине. На пиксельных значениях овал
+// на узких экранах ужимался до круга и читался не ползунком, а конусом.
 function EyePill() {
   return (
-    <span className="relative w-[24px] md:w-[42px] lg:w-[62px] h-[24px] md:h-[28px] lg:h-[34px] inline-flex items-center justify-center align-middle mx-1 md:mx-2">
+    <span className="relative w-[0.97em] h-[0.53em] inline-flex items-center justify-center align-middle mx-[0.16em] md:mx-[0.2em]">
       {/* Точка — всегда на месте */}
-      <span className="w-2 h-2 rounded-full bg-[#1a1a1a]" />
+      <span className="w-[0.125em] h-[0.125em] rounded-full bg-[#1a1a1a]" />
       {/* Овал ездит по горизонтали и отталкивается от точки. CSS-анимация transform
           идёт в потоке композитора и не конкурирует с прокруткой за главный поток.
           При prefers-reduced-motion стоит на месте. Ключевые кадры — в index.css */}
