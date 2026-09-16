@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Income } from "./types";
-import { remainingToPay, isOverdue, taxReserve, taxWithDeduction, normalizePaidAmount } from "./finance";
+import { remainingToPay, isOverdue, taxWithDeduction, normalizePaidAmount } from "./finance";
 
 const inc = (p: Partial<Income>): Income => ({
   id: "1", user_id: "u", amount: 1000, date: "2026-06-01", category: "Веб",
@@ -29,12 +29,6 @@ describe("isOverdue", () => {
   });
   it("due_date сегодня → ещё не просрочено", () => {
     expect(isOverdue(inc({ due_date: "2026-06-16", paid_amount: 0 }), "2026-06-16")).toBe(false);
-  });
-});
-
-describe("taxReserve", () => {
-  it("ставка% от суммы полученного (paid_amount)", () => {
-    expect(taxReserve(50000, 6)).toBe(3000);
   });
 });
 
@@ -86,6 +80,15 @@ describe("taxWithDeduction", () => {
     expect(r.deductionUsed).toBe(0);
     expect(r.deductionLeft).toBe(10000);
     expect(r.effectiveRatePercent).toBe(4);
+  });
+
+  it("нулевой доход без вычета — показываем полную ставку, а не льготную", () => {
+    expect(taxWithDeduction(0, ur, 0).effectiveRatePercent).toBe(6);
+  });
+
+  it("израсходованное и остаток в сумме дают исходный вычет", () => {
+    const r = taxWithDeduction(33333.33, ur, 10000);
+    expect(r.deductionUsed + r.deductionLeft).toBe(10000);
   });
 
   it("льготная ставка выше полной — считаем по полной, вычет не тратится", () => {

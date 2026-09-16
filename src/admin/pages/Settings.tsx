@@ -66,10 +66,10 @@ function CategoryEditor({ type, title }: { type: CategoryType; title: string }) 
   );
 }
 
-/** Число из поля ввода: запятая как разделитель, мусор и минус → 0. */
-function num(input: string): number {
+/** Число из поля ввода: запятая как разделитель. null — пусто, мусор или минус. */
+function num(input: string): number | null {
   const n = parseFloat(input.replace(",", "."));
-  return Number.isFinite(n) && n >= 0 ? n : 0;
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 export default function Settings() {
@@ -96,10 +96,23 @@ export default function Settings() {
   async function saveSettings() {
     const rate = num(taxRate);
     const reduced = num(taxReducedRate);
+    // Молча привести ставку к нулю нельзя: обнулится весь расчёт налога.
+    const problem =
+      rate === null
+        ? "Полная ставка: укажите число не меньше нуля"
+        : reduced === null
+          ? "Ставка с вычетом: укажите число не меньше нуля"
+          : reduced > rate
+            ? "Ставка с вычетом не может быть выше полной"
+            : null;
+    if (problem) {
+      setSavedNote(problem);
+      setTimeout(() => setSavedNote(null), 4000);
+      return;
+    }
     const res = await update({
-      tax_rate: rate,
-      // Льготная ставка не может быть выше полной — иначе вычет ничего не даёт.
-      tax_reduced_rate: Math.min(reduced, rate),
+      tax_rate: rate as number,
+      tax_reduced_rate: reduced as number,
       tax_deduction_start: taxDeduction > 0 ? taxDeduction : 0,
       default_monthly_goal: defaultGoal > 0 ? defaultGoal : null,
     });
@@ -171,15 +184,16 @@ export default function Settings() {
             </p>
           </div>
           <div>
-            <label className={labelCls}>Остаток налогового вычета, ₽</label>
+            <label className={labelCls}>Вычет на старте учёта, ₽</label>
             <div className="mt-1">
               <MoneyInput value={taxDeduction} onChange={setTaxDeduction} placeholder="10 000" />
             </div>
             <p className="mt-1 text-xs text-zinc-500">
-              Вычет даётся один раз на всё время работы, а не каждый год. Здесь — остаток
-              до самого раннего дохода, заведённого в админку; дальше он списывается сам,
-              по разнице между ставками. Сверить можно в «Мой налог». 0 — считать по полной
-              ставке.
+              Вычет даётся один раз на всё время работы, а не каждый год. Здесь — сколько
+              его оставалось <b>до самого раннего дохода</b>, заведённого в админку: дальше
+              он списывается сам, по разнице между ставками. Текущий остаток показан на
+              дашборде, переписывать его сюда не нужно. Сверить — в «Мой налог».
+              0 — считать по полной ставке.
             </p>
           </div>
           <div>

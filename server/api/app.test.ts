@@ -401,7 +401,8 @@ describe("/api/db", () => {
         table: "settings",
         action: "upsert",
         columns: "*",
-        values: { tax_rate: 6, tax_reduced_rate: 4, tax_deduction_start: 10000, default_monthly_goal: null },
+        // Значения намеренно не дефолтные: иначе тест пройдёт и если их проигнорировать
+        values: { tax_rate: 5, tax_reduced_rate: 2.5, tax_deduction_start: 7300, default_monthly_goal: null },
         onConflict: "user_id",
         ignoreDuplicates: true,
       },
@@ -411,7 +412,7 @@ describe("/api/db", () => {
 
     const read = await post("/db", { table: "settings", action: "select", columns: "*" }, cookie);
     const row = (await json(read)).data[0];
-    expect(row).toMatchObject({ tax_rate: 6, tax_reduced_rate: 4, tax_deduction_start: 10000 });
+    expect(row).toMatchObject({ tax_rate: 5, tax_reduced_rate: 2.5, tax_deduction_start: 7300 });
 
     const upd = await post(
       "/db",
@@ -425,6 +426,36 @@ describe("/api/db", () => {
       cookie,
     );
     expect((await json(upd)).data[0]).toMatchObject({ tax_reduced_rate: 3, tax_deduction_start: 2500 });
+
+    // Инвариант держит база, а не только форма: напрямую через API тоже нельзя
+    const broken = await post(
+      "/db",
+      {
+        table: "settings",
+        action: "update",
+        columns: "*",
+        values: { tax_reduced_rate: 99 },
+        filters: [{ column: "id", op: "eq", value: row.id }],
+      },
+      cookie,
+    );
+    expect(broken.status).toBeGreaterThanOrEqual(400);
+
+    const negative = await post(
+      "/db",
+      {
+        table: "settings",
+        action: "update",
+        columns: "*",
+        values: { tax_deduction_start: -1 },
+        filters: [{ column: "id", op: "eq", value: row.id }],
+      },
+      cookie,
+    );
+    expect(negative.status).toBeGreaterThanOrEqual(400);
+
+    const still = await post("/db", { table: "settings", action: "select", columns: "*" }, cookie);
+    expect((await json(still)).data[0]).toMatchObject({ tax_reduced_rate: 3, tax_deduction_start: 2500 });
   });
 
   it("чужие строки не видны, не меняются и не удаляются", async () => {

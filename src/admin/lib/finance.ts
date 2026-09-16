@@ -18,11 +18,6 @@ export function isOverdue(
   return i.due_date < todayIso;
 }
 
-/** Резерв на налог: ставка% от полученной суммы (Σ paid_amount). */
-export function taxReserve(receivedTotal: number, taxRatePercent: number): number {
-  return round2(receivedTotal * (taxRatePercent / 100));
-}
-
 /** Ставки НПД: полная и льготная, пока не израсходован вычет. */
 export interface TaxRates {
   /** Полная ставка, % — для юрлиц 6, для физлиц 4. */
@@ -63,16 +58,19 @@ export function taxWithDeduction(
   // Льготная ставка выше полной смысла не имеет — вычет тогда ничего не даёт.
   const reduced = Math.min(Math.max(0, rates.reducedRatePercent), full);
 
+  const available = round2(Math.max(0, deductionLeft));
   const fullTax = received * (full / 100);
   const discount = received * ((full - reduced) / 100);
-  const used = Math.min(Math.max(0, deductionLeft), discount);
+  const used = round2(Math.min(available, discount));
   const tax = round2(fullTax - used);
+  const left = round2(available - used);
 
   return {
     tax,
-    deductionUsed: round2(used),
-    deductionLeft: round2(Math.max(0, deductionLeft) - used),
-    effectiveRatePercent: received > 0 ? round2((tax / received) * 100) : reduced,
+    deductionUsed: used,
+    deductionLeft: left,
+    // При нулевом доходе показываем ставку, по которой пойдёт следующий рубль.
+    effectiveRatePercent: received > 0 ? round2((tax / received) * 100) : left > 0 ? reduced : full,
   };
 }
 

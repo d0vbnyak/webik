@@ -24,13 +24,16 @@ export default function Dashboard() {
   const incomesHook = useIncomes(year, month);
   const expensesHook = useExpenses(year, month);
   const receivables = useReceivables();
-  const { settings } = useSettings();
+  const { settings, loading: settingsLoading } = useSettings();
   const { getGoal } = useGoals();
   const { recurring } = useRecurring();
   const leadsHook = useLeads();
   const receivedBefore = useReceivedBefore(year, month);
 
-  const loading = incomesHook.loading || expensesHook.loading;
+  // Карточку «На налог» нельзя рисовать до настроек и истории доходов: без них
+  // ставка и остаток вычета посчитаются по дефолтам и число прыгнет.
+  const loading =
+    incomesHook.loading || expensesHook.loading || settingsLoading || receivedBefore.loading;
 
   const monthIncome = incomesHook.incomes.reduce((s, i) => s + i.amount, 0);
   const received = incomesHook.incomes.reduce((s, i) => s + i.paid_amount, 0);
@@ -43,8 +46,19 @@ export default function Dashboard() {
     reducedRatePercent: settings?.tax_reduced_rate ?? 4,
   };
   const deductionStart = settings?.tax_deduction_start ?? 0;
-  const deductionLeftNow = taxWithDeduction(receivedBefore.received, taxRates, deductionStart).deductionLeft;
+  // Историю не получили — считаем по полной ставке: завысить резерв на налог
+  // безопаснее, чем занизить, деньги на него откладывают заранее.
+  const deductionLeftNow = receivedBefore.error
+    ? 0
+    : taxWithDeduction(receivedBefore.received, taxRates, deductionStart).deductionLeft;
   const monthTax = taxWithDeduction(received, taxRates, deductionLeftNow);
+  const taxHint = receivedBefore.error
+    ? "история доходов не загрузилась — по полной ставке"
+    : monthTax.deductionLeft > 0
+      ? `вычета осталось ${formatMoney(monthTax.deductionLeft)}`
+      : deductionStart > 0
+        ? "вычет израсходован"
+        : "отложить с полученного";
   const receivablesTotal = receivables.items.reduce((s, i) => s + remainingToPay(i), 0);
   const goal = getGoal(year, month)?.target_amount ?? settings?.default_monthly_goal ?? 0;
 
@@ -79,17 +93,10 @@ export default function Dashboard() {
             <StatCard label="Расход за месяц" amount={monthExpenses} />
             <StatCard label="Прибыль" amount={profit} tone={profit >= 0 ? "text-brand-green" : "text-red-400"} />
             <StatCard
-              label={`На налог (${monthTax.effectiveRatePercent}%)`}
+              label={`На налог (${monthTax.effectiveRatePercent.toLocaleString("ru-RU")}%)`}
               amount={monthTax.tax}
-              hint={
-                receivedBefore.loading
-                  ? "отложить с полученного"
-                  : monthTax.deductionLeft > 0
-                    ? `вычета осталось ${formatMoney(monthTax.deductionLeft)}`
-                    : deductionStart > 0
-                      ? "вычет израсходован"
-                      : "отложить с полученного"
-              }
+              hint={taxHint}
+              tone={receivedBefore.error ? "text-amber-400" : undefined}
             />
           </div>
 
