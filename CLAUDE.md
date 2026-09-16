@@ -53,17 +53,36 @@ bd close <id>         # Complete work
 
 ## Build & Test
 
-_Add your build and test commands here_
-
 ```bash
-# Example:
-# npm install
-# npm test
+npm install
+npm run dev          # сайт + API на PGlite + чат, http://localhost:5173
+npm run build        # тайпчек фронтенда и server/ + shared/, сборка dist/
+npm run build:server # серверный бандл build/main.mjs
+npm test             # vitest
 ```
+
+Node.js ставился через winget: если сессия не видит `node`, в Git Bash —
+`export PATH="$PATH:/c/Program Files/nodejs"`.
+
+Выкладка на https://webik.tech — `bash deploy/deploy.sh` (в PowerShell:
+`& "C:\Program Files\Gitinash.exe" deploy/deploy.sh`). Из агента выкладка
+заблокирована классификатором прав — её запускает Сергей. Скрипт сам проверяет, что в
+сборке нет ключей Anthropic, Yandex Cloud и токена Telegram.
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+- **Фронтенд** — React 19 + Vite + Tailwind + TypeScript (`src/`). Админка — `src/admin`.
+- **Сервер** — Hono + PostgreSQL (`server/`): `main.ts` — прод (API, статика, чат),
+  `api/` — API админки и формы заявки, `db/migrations/` — миграции, применяются при
+  старте (применённую миграцию не править, новое — следующим файлом).
+- **ИИ-ассистент** — `server/chat.ts`, модель `deepseek-v4-flash` в Yandex AI Studio
+  через пакет `openai`. Включается при заданных `YANDEX_API_KEY` и `YANDEX_FOLDER_ID`,
+  иначе виджет показывает форму. Подробности, замеры моделей и границы —
+  `docs/chat-bot.md`, замер — `server/cli/chat-eval.ts` (тратит деньги).
+- **Заявки** — `server/orders.ts`: CRM, письмо, лимиты; общие для чата и формы.
+- **Общее** — `shared/`: контакты, цены (`prices.json`), проверка заявки.
+- **Прод** — docker compose на общем сервере рядом с чужим продом (`deploy/`),
+  секреты в `/opt/webik/.env`. Правки на сервере — только с разрешения Сергея.
 
 ## Conventions & Patterns
 
