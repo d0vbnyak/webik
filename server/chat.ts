@@ -292,6 +292,12 @@ type Turn = { reply: string; orderSent: boolean; keep: boolean };
 /** Ответ посетителю, когда заявка ушла, а модель не договорила. */
 const ORDER_SENT_REPLY = "Заявку передал — с вами свяжутся по указанному контакту.";
 
+/** Посетителю и в историю, когда модель не ответила ничего. */
+const EMPTY_REPLY = "Что-то я растерялся. Переспросите, пожалуйста, другими словами.";
+
+/** Приписка к ответу, оборванному лимитом токенов. */
+const TRUNCATED_NOTE = "Ответ получился длинным и оборвался. Спросите, пожалуйста, поконкретнее.";
+
 /** Вместо ответа, в котором модель описала вызов инструмента текстом. */
 const LEAKED_TOOL_REPLY =
   "Чтобы передать заявку, напишите, пожалуйста, одним сообщением: что нужно сделать и как с вами связаться.";
@@ -343,6 +349,8 @@ async function runTurn(
     maxRetries: 1,
   });
   const texts: string[] = [];
+  /** Текст, которым закончился ход: его видит посетитель, если был вызов инструмента */
+  let finalText = "";
   let orderSent = false;
   let usedTool = false;
 
@@ -381,29 +389,33 @@ async function runTurn(
     if (text.includes(ORDER_TOOL_NAME)) {
       // Замер: модель вместо вызова инструмента однажды написала его текстом —
       // с выдуманным диалогом и JSON заявки. Посетитель такого видеть не должен.
+      // Если заявка уже ушла — подтверждаем её, а не просим контакт заново.
       console.warn("[chat] модель написала вызов инструмента текстом");
-      text = LEAKED_TOOL_REPLY;
+      text = orderSent ? ORDER_SENT_REPLY : LEAKED_TOOL_REPLY;
     }
-    if (text) texts.push(text);
 
     const calls = (message.tool_calls ?? []).filter(
       (call): call is OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall => call.type === "function",
     );
 
-    // Реплика модели вместе с вызовами: без них API не примет результат
-    // инструмента на следующем круге.
-    session.messages.push(
-      calls.length > 0
-        ? { role: "assistant", content: text || null, tool_calls: calls }
-        : { role: "assistant", content: text },
-    );
-
-    if (calls.length > 0) usedTool = true;
-    if (calls.length === 0) {
+    if (calls.length > 0) {
+      usedTool = true;
+      if (text) texts.push(text);
+      // Реплика модели вместе с вызовами: без них API не примет результат
+      // инструмента на следующем круге.
+      session.messages.push({ role: "assistant", content: text || null, tool_calls: calls });
+    } else {
       if (choice.finish_reason === "length") {
-        // Ответ обрезан лимитом — честнее сказать об этом, чем оборвать на полуслове.
-        texts.push("Ответ получился длинным и оборвался. Спросите, пожалуйста, поконкретнее.");
+        // Ответ обрезан лимитом — честнее сказать об этом, чем оборвать на
+        // полуслове. Начало ответа оставляем.
+        text = text ? `${text}\n\n${TRUNCATED_NOTE}` : TRUNCATED_NOTE;
       }
+      // Пустую реплику не сохраняем как пустую: не каждый API примет её в
+      // истории. В истории и у посетителя — один и тот же текст.
+      text ||= orderSent ? ORDER_SENT_REPLY : EMPTY_REPLY;
+      texts.push(text);
+      finalText = text;
+      session.messages.push({ role: "assistant", content: text });
       break;
     }
 
@@ -434,24 +446,19 @@ async function runTurn(
   // история не обрывалась на полуслове
   const last = session.messages[session.messages.length - 1];
   if (last.role === "tool") {
-    const closing = orderSent ? ORDER_SENT_REPLY : "Не получилось оформить заявку. Попробуйте ещё раз.";
-    session.messages.push({ role: "assistant", content: closing });
-    // Подтверждение отправки посетитель должен увидеть, даже если раньше модель успела написать «сейчас оформлю»
-    if (orderSent || !texts.length) texts.push(closing);
+    // Итог хода — этот текст, даже если раньше модель успела написать «сейчас оформлю»
+    finalText = orderSent ? ORDER_SENT_REPLY : "Не получилось оформить заявку. Попробуйте ещё раз.";
+    session.messages.push({ role: "assistant", content: finalText });
   }
 
   // Если был вызов инструмента, посетителю — только итоговая реплика: модели
   // Яндекса пишут «передаю заявку» до вызова и повторяют то же после него, и
-  // склейка выходила вида «Спасибо, Олег! … Спасибо, Олег! …».
-  const reply = (usedTool ? (texts.at(-1) ?? "") : texts.join("\n\n")).trim();
-  if (reply) return { reply, orderSent, keep: true };
-
-  console.warn("[chat] пустой ответ модели");
-  return {
-    reply: orderSent ? ORDER_SENT_REPLY : "Что-то я растерялся. Переспросите, пожалуйста, другими словами.",
-    orderSent,
-    keep: true,
-  };
+  // склейка выходила вида «Спасибо, Олег! … Спасибо, Олег! …». Текст до вызова
+  // не показываем и тогда, когда итог пустой: «передаю заявку» при
+  // неотправленной заявке — неправда.
+  const reply = usedTool ? finalText : texts.join("\n\n");
+  if (reply === EMPTY_REPLY) console.warn("[chat] пустой ответ модели");
+  return { reply, orderSent, keep: true };
 }
 
 function send(res: ServerResponse, status: number, payload: unknown): void {

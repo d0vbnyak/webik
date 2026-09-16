@@ -89,6 +89,7 @@ if (!access) {
 }
 
 const models = (process.argv[2] ?? DEFAULT_MODEL).split(",");
+const scenarios = SCENARIOS.filter((x) => x.name.includes(process.env.ONLY ?? ""));
 let ipCounter = 0;
 
 for (const model of models) {
@@ -115,7 +116,7 @@ for (const model of models) {
   let passed = 0;
   let seconds = 0;
   let messages = 0;
-  for (const s of SCENARIOS.filter((x) => x.name.includes(process.env.ONLY ?? ""))) {
+  for (const s of scenarios) {
     ip = `10.0.0.${++ipCounter}`;
     const before = orders.length;
     const toolsBefore = toolCalls;
@@ -152,7 +153,7 @@ for (const model of models) {
   await new Promise((r) => setTimeout(r, 200));
   server.close();
   console.log(
-    `  итого ${passed}/${SCENARIOS.length}, ${seconds.toFixed(0)} с на ${messages} реплик, ` +
+    `  итого ${passed}/${scenarios.length}, ${seconds.toFixed(0)} с на ${messages} реплик, ` +
       `${calls} запросов, ${spent.toFixed(2)} ₽ (${(spent / messages).toFixed(2)} ₽ за реплику), из кэша ${cached} ток.`,
   );
   if (orders.length) console.log(`  заявка:\n${orders[0].replace(/^/gm, "      ")}`);
