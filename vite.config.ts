@@ -2,6 +2,7 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { crmOrderSaver, notifiersFromEnv } from "./server/orders";
+import { yandexFromEnv } from "./server/ai/yandex";
 
 /**
  * Эндпоинт чата на dev-сервере.
@@ -57,7 +58,7 @@ function adminApi(mode: string): Plugin {
         if (!url.startsWith("/api/") || url.startsWith("/api/chat")) return next();
         server
           .ssrLoadModule("/server/dev.ts")
-          .then((mod) => mod.getDevHandler({ autologin, orderNotifier: notifiersFromEnv(env) }))
+          .then((mod) => mod.getDevHandler({ autologin, orderNotifier: notifiersFromEnv(env), yandex: yandexFromEnv(env) }))
           .then((handle) => handle(req, res))
           .catch(next);
       });

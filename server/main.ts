@@ -14,6 +14,7 @@
  *   YANDEX_API_KEY      ИИ-ассистент на сайте (Yandex AI Studio, server/chat.ts).
  *   YANDEX_FOLDER_ID    Нужны обе. Не заданы — чат выключен, и виджет
  *                       ассистента показывает форму заявки (POST /api/order).
+ *                       Те же ключи включают ИИ в админке (server/ai/).
  */
 import { Hono } from "hono";
 import { serve, type HttpBindings } from "@hono/node-server";
@@ -26,6 +27,7 @@ import { createApp } from "./api/app";
 import { clientIp, trustedProxyByHost } from "./http";
 import { handleChat, yandexFromEnv } from "./chat";
 import { crmOrderSaver, notifiersFromEnv } from "./orders";
+import { createOpener } from "./ai/opener";
 
 process.on("unhandledRejection", (e) => {
   console.error("[webik] необработанная ошибка:", (e as Error)?.message ?? e);
@@ -106,7 +108,16 @@ if (yandex) {
   );
 }
 
-root.route("/", createApp({ db, secureCookies, clientIp: (c) => clientIp(c, isTrustedProxy), orderNotifier }));
+root.route(
+  "/",
+  createApp({
+    db,
+    secureCookies,
+    clientIp: (c) => clientIp(c, isTrustedProxy),
+    orderNotifier,
+    opener: yandex ? createOpener({ yandex }) : null,
+  }),
+);
 
 // Статика сборки; остальные пути — index.html (маршрутизация на клиенте)
 root.use("/*", serveStatic({ root: path.relative(process.cwd(), staticDir) || "." }));

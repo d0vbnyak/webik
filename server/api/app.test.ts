@@ -5,6 +5,7 @@ import { createApp } from "./app";
 import type { OrderNotifier, OrderSaver } from "../orders";
 import { LoginLimiter, Semaphore, createUser, hashPassword, isTokenFormat, limiterIpKey, verifyPassword } from "./auth";
 import { buildQuery, QueryError, validateRequest } from "./query";
+import { OpenerError } from "../ai/opener";
 import { base32Decode, base32Encode, generateTotpSecret, totpCode, verifyTotp } from "./totp";
 
 let db: Db;
@@ -703,6 +704,83 @@ describe("миграции", () => {
     } finally {
       await mem.close();
     }
+  });
+});
+
+describe("/api/ai/opener", () => {
+  const draft = { first_line: "Увидел у вас бесплатный выезд" };
+  const calls: unknown[] = [];
+  const withOpener = (opener: Parameters<typeof createApp>[0]["opener"]) => {
+    app = createApp({ db, secureCookies: false, clientIp: () => ip, limiter, opener });
+  };
+  const newLead = async (cookie: string, values: Record<string, unknown>) => {
+    const res = await post("/db", { table: "leads", action: "insert", columns: "id", values }, cookie);
+    return (await json(res)).data[0].id as string;
+  };
+
+  beforeEach(() => {
+    calls.length = 0;
+    withOpener(async (input) => {
+      calls.push(input);
+      return draft as never;
+    });
+  });
+
+  it("без сессии — 401, без X-WebIK — 403", async () => {
+    expect((await post("/ai/opener", { leadId: crypto.randomUUID() })).status).toBe(401);
+    const cookie = await signIn("sergey@example.com");
+    expect((await post("/ai/opener", { leadId: crypto.randomUUID() }, cookie, false)).status).toBe(403);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("свой лид с сайтом → черновик; в ИИ уходят только компания, город и сайт", async () => {
+    const cookie = await signIn("sergey@example.com");
+    const id = await newLead(cookie, {
+      company: "Охрана-Сервис",
+      city: "Казань",
+      website: "ohrana.ru",
+      email: "boss@ohrana.ru",
+      contact_name: "Иван Петров",
+    });
+    const res = await post("/ai/opener", { leadId: id }, cookie);
+    expect(res.status).toBe(200);
+    expect(await json(res)).toEqual({ draft });
+    expect(calls).toEqual([{ company: "Охрана-Сервис", city: "Казань", website: "ohrana.ru" }]);
+  });
+
+  it("чужой лид — 404, лид без сайта — 400, мусор вместо id — 400", async () => {
+    const other = await signIn("other@example.com");
+    const foreign = await newLead(other, { company: "Чужая", website: "chuzhaya.ru" });
+    const cookie = await signIn("sergey@example.com");
+    expect((await post("/ai/opener", { leadId: foreign }, cookie)).status).toBe(404);
+    const bare = await newLead(cookie, { company: "Без сайта" });
+    const res = await post("/ai/opener", { leadId: bare }, cookie);
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toContain("не указан сайт");
+    expect((await post("/ai/opener", { leadId: "1 or 1=1" }, cookie)).status).toBe(400);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("ошибка ИИ — её статус и текст; неожиданная — 502 без подробностей; без ключей — 503", async () => {
+    const cookie = await signIn("sergey@example.com");
+    const id = await newLead(cookie, { company: "Сбой", website: "sboi.ru" });
+    withOpener(async () => {
+      throw new OpenerError("Не получилось прочитать сайт: Сайт ответил ошибкой 503.", 422);
+    });
+    let res = await post("/ai/opener", { leadId: id }, cookie);
+    expect(res.status).toBe(422);
+    expect((await json(res)).error).toContain("ошибкой 503");
+
+    withOpener(async () => {
+      throw new Error("секретная внутренняя ошибка");
+    });
+    res = await post("/ai/opener", { leadId: id }, cookie);
+    expect(res.status).toBe(502);
+    expect(JSON.stringify(await json(res))).not.toContain("секретная");
+
+    withOpener(null);
+    res = await post("/ai/opener", { leadId: id }, cookie);
+    expect(res.status).toBe(503);
   });
 });
 

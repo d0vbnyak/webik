@@ -20,6 +20,8 @@ import { createApp } from "./api/app";
 import { SESSION_DAYS, createSession, createUser, sessionCookieName } from "./api/auth";
 import { clientIp } from "./http";
 import type { OrderNotifier } from "./orders";
+import { createOpener } from "./ai/opener";
+import type { YandexAccess } from "./ai/yandex";
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -42,7 +44,7 @@ async function openDevDb(): Promise<Db> {
 // не должны пересоздаваться на каждый запрос
 let handler: Promise<Handler> | null = null;
 
-type DevOptions = { autologin: boolean; orderNotifier: OrderNotifier | null };
+type DevOptions = { autologin: boolean; orderNotifier: OrderNotifier | null; yandex: YandexAccess | null };
 
 export function getDevHandler(opts: DevOptions): Promise<Handler> {
   handler ??= buildDevHandler(opts);
@@ -89,6 +91,7 @@ async function buildDevHandler(opts: DevOptions): Promise<Handler> {
     secureCookies: false,
     clientIp: (c) => clientIp(c, () => false),
     orderNotifier: opts.orderNotifier,
+    opener: opts.yandex ? createOpener({ yandex: opts.yandex }) : null,
   }));
   return getRequestListener(root.fetch) as Handler;
 }

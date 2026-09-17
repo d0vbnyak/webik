@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useLead } from "../hooks/useLeads";
@@ -26,6 +26,8 @@ import MoneyInput from "../components/MoneyInput";
 import Spinner from "../components/Spinner";
 import StageChip from "../components/StageChip";
 import ConfirmDelete from "../components/ConfirmDelete";
+import OpenerDraftModal from "../components/OpenerDraftModal";
+import { suggestOpener, type OpenerDraft } from "../lib/ai";
 import { inputCls, labelCls, btnPrimary, btnGhost } from "../components/controls";
 
 type StageForm = { stage: LeadStage; reason: LostReason | ""; nextStep: string; nextStepDate: string; comment: string };
@@ -77,6 +79,11 @@ export default function LeadCard() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [makingClient, setMakingClient] = useState(false);
+  const [aiDraft, setAiDraft] = useState<OpenerDraft | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  // Номер текущего запроса: ответ на запрос, после которого окно закрыли, не показываем
+  const aiRequest = useRef(0);
 
   if (loading) return <div className="py-10 text-center"><Spinner /></div>;
   if (error) return <p className="text-sm text-red-400">Ошибка загрузки: {error}</p>;
@@ -250,6 +257,25 @@ export default function LeadCard() {
     }
   }
 
+  async function askOpener() {
+    if (!lead || aiLoading) return;
+    const request = ++aiRequest.current;
+    setAiLoading(true);
+    setAiError(null);
+    const res = await suggestOpener(lead.id);
+    if (request !== aiRequest.current) return;
+    setAiLoading(false);
+    if (res.error !== null) return setAiError(res.error);
+    setAiDraft(res.data);
+  }
+
+  function closeOpener() {
+    aiRequest.current += 1;
+    setAiLoading(false);
+    setAiDraft(null);
+    setAiError(null);
+  }
+
   const nextOverdue = lead.next_step_date ? lead.next_step_date < today : false;
   const websiteHref = lead.website && !/^https?:\/\//i.test(lead.website) ? `https://${lead.website}` : lead.website;
 
@@ -400,24 +426,39 @@ export default function LeadCard() {
         </Card>
       </div>
 
-      {(lead.business || lead.hook || lead.first_line || lead.variant) && (
-        <Card>
-          <h2 className="mb-2 font-display text-base font-semibold">Для письма</h2>
+      <Card>
+        <div className="mb-2 flex items-start justify-between gap-3">
+          <h2 className="font-display text-base font-semibold">Для письма</h2>
+          <button
+            type="button"
+            onClick={() => void askOpener()}
+            disabled={!lead.website || aiLoading}
+            className={`${btnGhost} shrink-0 disabled:opacity-50`}
+          >
+            {aiLoading ? <><Spinner /> Читаю сайт…</> : lead.first_line ? "ИИ: другой вариант" : "ИИ: первая строка"}
+          </button>
+        </div>
+        {!lead.website && <p className="mb-2 text-xs text-zinc-500">Чтобы ИИ предложил первую строку, добавьте сайт в карточке.</p>}
+        {aiLoading && <p className="mb-2 text-xs text-zinc-500">Обычно 10–40 секунд: сервер читает сайт, модель ищет зацепку.</p>}
+        {aiError && !aiDraft && <p className="mb-2 text-sm text-red-400">{aiError}</p>}
+        {lead.business || lead.hook || lead.variant ? (
           <dl className="space-y-2 text-sm">
             <Row label="Вариант">{lead.variant}</Row>
             <Row label="Чем заняты">{lead.business}</Row>
             <Row label="Зацепка">{lead.hook}</Row>
           </dl>
-          {lead.first_line && (
-            <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
-              <p className="whitespace-pre-line text-sm text-zinc-200">{lead.first_line}</p>
-              <button type="button" onClick={() => void copyFirstLine()} className={`${btnGhost} mt-2`}>
-                {copied ? "Скопировано" : "Копировать первую строку"}
-              </button>
-            </div>
-          )}
-        </Card>
-      )}
+        ) : (
+          !lead.first_line && <p className="text-sm text-zinc-500">Зацепки и первой строки пока нет.</p>
+        )}
+        {lead.first_line && (
+          <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+            <p className="whitespace-pre-line text-sm text-zinc-200">{lead.first_line}</p>
+            <button type="button" onClick={() => void copyFirstLine()} className={`${btnGhost} mt-2`}>
+              {copied ? "Скопировано" : "Копировать первую строку"}
+            </button>
+          </div>
+        )}
+      </Card>
 
       <Card>
         <h2 className="mb-2 font-display text-base font-semibold">История</h2>
@@ -443,6 +484,20 @@ export default function LeadCard() {
       <div className="flex justify-end">
         <ConfirmDelete onConfirm={() => void deleteLead()} label="Удалить лид" />
       </div>
+
+      {/* Черновик первой строки от ИИ */}
+      <OpenerDraftModal
+        lead={lead}
+        draft={aiDraft}
+        onClose={closeOpener}
+        onRetry={() => void askOpener()}
+        retrying={aiLoading}
+        retryError={aiDraft ? aiError : null}
+        onSave={async (patch) => {
+          const res = await update(patch);
+          return { error: res.error ?? null };
+        }}
+      />
 
       {/* Смена этапа */}
       <Modal open={stageOpen} onClose={() => setStageOpen(false)} title="Сменить этап">

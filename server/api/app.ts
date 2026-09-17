@@ -6,6 +6,7 @@
  *   GET  /api/auth/session  → { user } или { user: null }
  *   POST /api/db            описание запроса (query.ts) → { data, error }
  *   POST /api/order         заявка с сайта { name, contact, task, details } → CRM (+ Telegram)
+ *   POST /api/ai/opener     { leadId } → черновик первой строки письма по сайту лида (server/ai/opener.ts)
  *
  * Защита от CSRF: cookie с SameSite=Strict, и каждый POST обязан нести
  * заголовок X-WebIK: 1 — чужой сайт не может выставить его без CORS-разрешения.
@@ -55,6 +56,7 @@ import { QueryError, buildQuery, referenceChecks, validateRequest } from "./quer
 import { OrderLimiter, crmOrderSaver, submitOrder, type OrderNotifier, type OrderSaver } from "../orders";
 import { validateOrder } from "../../shared/order";
 import { TELEGRAM_HANDLE } from "../../shared/contacts";
+import { OpenerError, type Opener } from "../ai/opener";
 
 export type AppOptions = {
   db: Db;
@@ -73,6 +75,8 @@ export type AppOptions = {
   /** Куда писать заявки. По умолчанию — CRM в этой же базе; подменяется в тестах. */
   orderSaver?: OrderSaver | null;
   orderLimiter?: OrderLimiter;
+  /** ИИ-черновик первой строки письма. null — ключи Yandex AI Studio не заданы. */
+  opener?: Opener | null;
 };
 
 type Env = { Variables: { user: SessionUser } };
@@ -114,6 +118,7 @@ export function createApp(opts: AppOptions) {
   app.use("/auth/*", bodyLimit({ maxSize: 8 * 1024, onError: tooLarge }));
   app.use("/db", bodyLimit({ maxSize: 2 * 1024 * 1024, onError: tooLarge }));
   app.use("/order", bodyLimit({ maxSize: 16 * 1024, onError: tooLarge }));
+  app.use("/ai/*", bodyLimit({ maxSize: 8 * 1024, onError: tooLarge }));
 
   /**
    * Пользователь по cookie сессии. Браузер может прислать несколько cookie с одним
@@ -224,12 +229,14 @@ export function createApp(opts: AppOptions) {
     return c.json({ user });
   });
 
-  app.use("/db", async (c, next) => {
+  const requireUser = async (c: Context<Env>, next: () => Promise<void>) => {
     const user = await currentUser(c);
     if (!user) return c.json({ data: null, error: { message: "Сессия истекла — войдите снова" } }, 401);
     c.set("user", user);
     await next();
-  });
+  };
+  app.use("/db", requireUser);
+  app.use("/ai/*", requireUser);
 
   app.post("/db", async (c) => {
     const userId = c.get("user").id;
@@ -286,6 +293,30 @@ export function createApp(opts: AppOptions) {
     }
   });
 
+  // Черновик первой строки письма. Лид — только свой; в модель уходит только публичное
+  app.post("/ai/opener", async (c) => {
+    if (!opts.opener) {
+      return c.json({ error: "ИИ не настроен: на сервере не заданы YANDEX_API_KEY и YANDEX_FOLDER_ID" }, 503);
+    }
+    const body = await readJson(c);
+    const leadId = typeof body?.leadId === "string" ? body.leadId : "";
+    if (!UUID_RE.test(leadId)) return c.json({ error: "Некорректный лид" }, 400);
+    const [lead] = await db.query<{ company: string; city: string | null; website: string | null }>(
+      "select company, city, website from leads where id = $1 and user_id = $2",
+      [leadId, c.get("user").id],
+    );
+    if (!lead) return c.json({ error: "Лид не найден" }, 404);
+    if (!lead.website?.trim()) return c.json({ error: "У лида не указан сайт — добавьте его в карточке" }, 400);
+    try {
+      const draft = await opts.opener({ company: lead.company, city: lead.city, website: lead.website });
+      return c.json({ draft });
+    } catch (e) {
+      if (e instanceof OpenerError) return c.json({ error: e.message }, e.status);
+      console.error("[api/ai/opener]", (e as Error).message);
+      return c.json({ error: "ИИ сейчас не отвечает — попробуйте через минуту" }, 502);
+    }
+  });
+
   app.notFound((c) => c.json({ error: "Не найдено" }, 404));
   app.onError((e, c) => {
     console.error("[api]", e.message);
@@ -294,6 +325,8 @@ export function createApp(opts: AppOptions) {
 
   return app;
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function pgMessage(code: string): string {
   switch (code) {

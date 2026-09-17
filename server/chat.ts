@@ -35,9 +35,9 @@ import { OrderLimiter, submitOrder, type OrderNotifier, type OrderSaver } from "
 import { HISTORY_MAX_MESSAGES, MESSAGE_MAX_CHARS } from "../shared/chat";
 import { CONTACT_EMAIL, TELEGRAM_HANDLE } from "../shared/contacts";
 import { validateOrder } from "../shared/order";
+import { createYandexClient, modelUri, yandexFromEnv, type YandexAccess } from "./ai/yandex";
 
-/** OpenAI-совместимый адрес Yandex AI Studio. */
-const BASE_URL = "https://ai.api.cloud.yandex.net/v1";
+export { yandexFromEnv, type YandexAccess };
 
 /**
  * Модель чата. Выбрана замером сценариев на этом обработчике
@@ -110,9 +110,6 @@ const ORDER_TOOL: OpenAI.Chat.Completions.ChatCompletionFunctionTool = {
 type Message = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 type Session = { messages: Message[]; touched: number; ordersSent: number };
 
-/** Доступ к Yandex AI Studio: API-ключ сервисного аккаунта и каталог. */
-export type YandexAccess = { apiKey: string; folderId: string };
-
 export type ChatOptions = {
   /** null — чат выключен, виджет показывает форму заявки */
   yandex: YandexAccess | null;
@@ -123,16 +120,6 @@ export type ChatOptions = {
   /** Модель без каталога. По умолчанию DEFAULT_MODEL — поле для замеров. */
   model?: string;
 };
-
-/**
- * Доступ из переменных окружения. Нужны обе: без каталога запрос не собрать.
- * Идентификатор каталога начинается с b1g — это не id сервисного аккаунта.
- */
-export function yandexFromEnv(env: Record<string, string | undefined>): YandexAccess | null {
-  const apiKey = env.YANDEX_API_KEY?.trim();
-  const folderId = env.YANDEX_FOLDER_ID?.trim();
-  return apiKey && folderId ? { apiKey, folderId } : null;
-}
 
 /** Состояние в памяти процесса: перезапуск сервера его обнуляет. */
 const ipHits = new Map<string, number[]>();
@@ -339,15 +326,8 @@ async function runTurn(
   },
 ): Promise<Turn> {
   // Посетитель в окне чата не ждёт по 10 минут (таймаут SDK по умолчанию)
-  const client = new OpenAI({
-    apiKey: opts.yandex.apiKey,
-    baseURL: BASE_URL,
-    project: opts.yandex.folderId,
-    // По умолчанию Яндекс сохраняет запросы у себя; переписка посетителей — нет.
-    defaultHeaders: { "x-data-logging-enabled": "false" },
-    timeout: 45_000,
-    maxRetries: 1,
-  });
+  // По умолчанию Яндекс сохраняет запросы у себя; клиент отключает это заголовком
+  const client = createYandexClient(opts.yandex, { timeout: 45_000 });
   /** Тексты хода без вызова инструмента — склеиваются в ответ */
   const texts: string[] = [];
   /** Текст, которым закончился ход: его видит посетитель, если был вызов инструмента */
@@ -357,7 +337,7 @@ async function runTurn(
 
   for (let round = 0; round < LIMITS.toolRounds; round++) {
     const response = await client.chat.completions.create({
-      model: `gpt://${opts.yandex.folderId}/${opts.model}`,
+      model: modelUri(opts.yandex, opts.model),
       max_tokens: MAX_TOKENS,
       // Вопросы посетителей простые, глубокие рассуждения тут не окупаются,
       // а посетитель ждёт ответа в окне чата. API Яндекса параметр принимает.
