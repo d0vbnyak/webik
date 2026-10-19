@@ -29,6 +29,12 @@ const str = (v: unknown, max: number): string | null => {
   return t ? t.slice(0, max) : null;
 };
 
+/** Почта из чужого сайта: только адрес, без «?bcc=…» и пробелов, — иначе mailto: подставит лишнее. */
+function cleanEmail(v: unknown): string | null {
+  const e = str(v, 200);
+  return e && /^[^\s@?&#/]+@[^\s@?&#/]+\.[a-z]{2,}$/i.test(e) ? e : null;
+}
+
 export type ParsedImport = { items: NewCandidate[]; errors: string[] };
 
 /**
@@ -58,7 +64,7 @@ export function parseCandidatesJson(text: string): ParsedImport {
     if (!name) return void errors.push(`${row}: нет названия`);
     const url = normalizeUrl(typeof o.site_url === "string" ? o.site_url : "");
     if (!url.url) return void errors.push(`${row} (${name}): ${url.error ?? "нет ссылки на сайт"}`);
-    const domain = (domainOf(url.url) ?? "").toLowerCase();
+    const domain = (domainOf(url.url) ?? "").toLowerCase().replace(/\.$/, "");
     if (!/^[a-z0-9.-]+$/.test(domain)) return void errors.push(`${row} (${name}): домен ${domain} — только латиница`);
     if (seen.has(domain)) return void errors.push(`${row} (${name}): ${domain} уже есть выше в файле`);
     seen.add(domain);
@@ -72,8 +78,8 @@ export function parseCandidatesJson(text: string): ParsedImport {
       domain,
       city: str(o.city, 100),
       niche: str(o.niche, 100),
-      phone: str(o.phone, 50),
-      email: str(o.email, 200),
+      phone: typeof o.phone === "number" ? String(o.phone) : str(o.phone, 50),
+      email: cleanEmail(o.email),
       problems: problems ? problems.slice(0, 2000) : null,
       score,
       status: "new",
@@ -97,4 +103,23 @@ export function sortCandidates<T extends Pick<Candidate, "status" | "score" | "n
   return [...list].sort(
     (a, b) => order[a.status] - order[b.status] || (b.score ?? 0) - (a.score ?? 0) || a.name.localeCompare(b.name),
   );
+}
+
+export type CandidateAction = "contacted" | "declined" | "restore";
+
+/**
+ * Патч статуса по действию. «Вернуть» откатывает на шаг назад и не теряет
+ * факт письма: из отказа или осиротевшего «В проекте» — в «Написали», если
+ * писали, иначе в «Не писали». Дата письма стирается только при отмене
+ * самого «Написал».
+ */
+export function statusPatch(
+  c: Pick<Candidate, "status" | "contacted_at">,
+  action: CandidateAction,
+  todayIso: string,
+): Pick<Candidate, "status" | "contacted_at" | "project_id"> | Pick<Candidate, "status" | "contacted_at"> {
+  if (action === "contacted") return { status: "contacted", contacted_at: c.contacted_at ?? todayIso };
+  if (action === "declined") return { status: "declined", contacted_at: c.contacted_at };
+  if (c.status === "contacted") return { status: "new", contacted_at: null };
+  return { status: c.contacted_at ? "contacted" : "new", contacted_at: c.contacted_at, project_id: null };
 }

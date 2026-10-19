@@ -1,43 +1,58 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useCandidates } from "../hooks/useCandidates";
-import { useProjects } from "../hooks/useProjects";
-import { CANDIDATE_STATUSES, candidateStatusLabel, parseCandidatesJson, problemList, sortCandidates, type ParsedImport } from "../lib/candidates";
+import { createProject } from "../hooks/useProjects";
+import {
+  CANDIDATE_STATUSES,
+  candidateStatusLabel,
+  parseCandidatesJson,
+  problemList,
+  sortCandidates,
+  statusPatch,
+  type CandidateAction,
+  type ParsedImport,
+} from "../lib/candidates";
 import { todayISO, formatDate } from "../lib/dates";
 import type { Candidate, CandidateStatus } from "../lib/types";
 import NewProjectModal, { type ProjectDraft } from "../components/NewProjectModal";
 import Modal from "../components/Modal";
 import Spinner from "../components/Spinner";
+import ConfirmDelete from "../components/ConfirmDelete";
 import { IconExternal } from "../components/icons";
 import { btnGhost, btnPrimary, inputCls } from "../components/controls";
 
 type Filter = CandidateStatus | "all";
 
-const action = "rounded-lg px-3 py-1.5 text-[13px] transition-colors disabled:opacity-60";
+const action = "inline-flex min-h-9 items-center rounded-lg px-3 text-[13px] transition-colors disabled:opacity-60";
 const actionMain = `${action} bg-zinc-100 font-medium text-zinc-950 active:scale-[0.97]`;
 const actionQuiet = `${action} text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200`;
 
 function CandidateRow({
   c,
   busy,
-  onStatus,
+  onAction,
   onProject,
+  onRemove,
 }: {
   c: Candidate;
   busy: boolean;
-  onStatus: (s: CandidateStatus) => void;
+  onAction: (a: CandidateAction) => void;
   onProject: () => void;
+  onRemove: () => void;
 }) {
   const problems = problemList(c.problems);
   const safeUrl = /^https?:\/\//i.test(c.site_url) ? c.site_url : null;
-  const muted = c.status === "declined";
+  const orphan = c.status === "converted" && !c.project_id;
+  const statusText = orphan
+    ? "проект удалён"
+    : c.status === "contacted" && c.contacted_at
+      ? `написали ${formatDate(c.contacted_at)}`
+      : candidateStatusLabel(c.status);
   return (
-    <li className={`min-w-0 rounded-xl border border-zinc-800/80 bg-zinc-900 px-4 py-3 ${muted ? "opacity-60" : ""}`}>
+    <li className={`min-w-0 rounded-xl border border-zinc-800/80 bg-zinc-900 px-4 py-3 ${c.status === "declined" ? "opacity-60" : ""}`}>
       <div className="flex items-baseline justify-between gap-3">
         <span className="truncate text-[15px] font-medium text-zinc-100">{c.name}</span>
-        <span className={`shrink-0 text-xs ${c.status === "new" ? "text-amber-400" : "text-zinc-500"}`}>
-          {c.status === "contacted" && c.contacted_at ? `написали ${formatDate(c.contacted_at)}` : candidateStatusLabel(c.status)}
-        </span>
+        <span className={`shrink-0 text-xs ${c.status === "new" ? "text-amber-400" : "text-zinc-500"}`}>{statusText}</span>
       </div>
       <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-zinc-500">
         {safeUrl ? (
@@ -48,14 +63,15 @@ function CandidateRow({
         ) : (
           <span className="font-mono">{c.domain}</span>
         )}
-        {[c.city, c.niche].filter(Boolean).map((t) => (
-          <span key={t}>· {t}</span>
+        {[c.city, c.niche].filter(Boolean).map((t, i) => (
+          <span key={i}>· {t}</span>
         ))}
+        {c.score != null && <span title="Балл устарелости сайта: чем выше, тем хуже">· балл {c.score}</span>}
       </div>
       {problems.length > 0 && (
-        <ul className="mt-2.5 flex flex-wrap gap-1.5">
-          {problems.map((p) => (
-            <li key={p} className="rounded-md bg-zinc-800/70 px-2 py-0.5 text-xs text-zinc-300">
+        <ul className="mt-2.5 flex flex-wrap gap-1.5" aria-label="Что не так с сайтом">
+          {problems.map((p, i) => (
+            <li key={i} className="min-w-0 break-words rounded-md bg-zinc-800/70 px-2 py-0.5 text-xs text-zinc-300">
               {p}
             </li>
           ))}
@@ -64,34 +80,36 @@ function CandidateRow({
       {(c.phone || c.email) && (
         <div className="mt-2.5 flex flex-wrap gap-x-4 text-[13px]">
           {c.phone && <a href={`tel:${c.phone.replace(/[^\d+]/g, "")}`} className="text-zinc-300 hover:text-zinc-100">{c.phone}</a>}
-          {c.email && <a href={`mailto:${c.email}`} className="text-zinc-300 hover:text-zinc-100">{c.email}</a>}
+          {c.email && <a href={`mailto:${c.email}`} className="break-all text-zinc-300 hover:text-zinc-100">{c.email}</a>}
         </div>
       )}
-      <div className="mt-3 flex flex-wrap gap-2">
-        {c.status === "converted" ? (
-          c.project_id && <Link to={`/admin/projects/${c.project_id}`} className={actionQuiet}>Открыть проект</Link>
+      {c.note && <p className="mt-2 whitespace-pre-line break-words text-xs text-zinc-500">{c.note}</p>}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {c.status === "converted" && c.project_id ? (
+          <Link to={`/admin/projects/${c.project_id}`} className={actionQuiet}>Открыть проект</Link>
         ) : (
           <>
             {c.status === "new" && (
-              <button type="button" disabled={busy} onClick={() => onStatus("contacted")} className={actionMain}>
+              <button type="button" disabled={busy} onClick={() => onAction("contacted")} aria-label={`Написал: ${c.name}`} className={actionMain}>
                 Написал
               </button>
             )}
-            {c.status !== "declined" && (
-              <button type="button" disabled={busy} onClick={onProject} className={c.status === "new" ? actionQuiet : actionMain}>
+            {(c.status === "new" || c.status === "contacted") && (
+              <button type="button" disabled={busy} onClick={onProject} aria-label={`В проект: ${c.name}`} className={c.status === "new" ? actionQuiet : actionMain}>
                 В проект
               </button>
             )}
-            {c.status === "declined" || c.status === "contacted" ? (
-              <button type="button" disabled={busy} onClick={() => onStatus("new")} className={actionQuiet}>
+            {c.status !== "new" && (
+              <button type="button" disabled={busy} onClick={() => onAction("restore")} aria-label={`Вернуть: ${c.name}`} className={actionQuiet}>
                 Вернуть
               </button>
-            ) : null}
-            {c.status !== "declined" && (
-              <button type="button" disabled={busy} onClick={() => onStatus("declined")} className={actionQuiet}>
+            )}
+            {(c.status === "new" || c.status === "contacted") && (
+              <button type="button" disabled={busy} onClick={() => onAction("declined")} aria-label={`Отказ: ${c.name}`} className={actionQuiet}>
                 Отказ
               </button>
             )}
+            {c.status === "declined" && <ConfirmDelete label="Удалить" onConfirm={onRemove} />}
           </>
         )}
       </div>
@@ -102,10 +120,10 @@ function CandidateRow({
 export default function Candidates() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const { candidates, loading, error, update, importMany } = useCandidates();
-  const { add: addProject } = useProjects();
+  const { candidates, loading, error, update, remove, importMany } = useCandidates();
 
-  const [busy, setBusy] = useState<string | null>(null);
+  // Строки, по которым идёт запрос: набор, а не один id — действия на разных строках не мешают друг другу
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ c: Candidate; data: ProjectDraft } | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -113,6 +131,7 @@ export default function Candidates() {
   const [parsed, setParsed] = useState<ParsedImport | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const raw = params.get("status");
   const filter: Filter = CANDIDATE_STATUSES.some((s) => s.id === raw) ? (raw as Filter) : raw === "all" ? "all" : "new";
@@ -125,14 +144,15 @@ export default function Candidates() {
   }, [candidates]);
   const list = sortCandidates(filter === "all" ? candidates : candidates.filter((c) => c.status === filter));
 
-  async function setStatus(c: Candidate, status: CandidateStatus) {
-    setBusy(c.id);
+  async function withBusy(id: string, run: () => Promise<{ error: string | null }>) {
+    setBusy((prev) => new Set(prev).add(id));
     setActionError(null);
-    const res = await update(c.id, {
-      status,
-      contacted_at: status === "contacted" ? todayISO() : status === "new" ? null : c.contacted_at,
+    const res = await run();
+    setBusy((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
     });
-    setBusy(null);
     if (res.error) setActionError(res.error);
   }
 
@@ -147,9 +167,10 @@ export default function Candidates() {
   async function runImport() {
     if (!parsed || parsed.items.length === 0) return;
     setImporting(true);
+    setImportError(null);
     const res = await importMany(parsed.items);
     setImporting(false);
-    if (res.error) return setImportResult(`Ошибка: ${res.error}`);
+    if (res.error) return setImportError(res.error);
     setImportOpen(false);
     setImportText("");
     setParsed(null);
@@ -170,6 +191,7 @@ export default function Candidates() {
           onClick={() => {
             setImportOpen(true);
             setImportResult(null);
+            setImportError(null);
           }}
           className={btnGhost}
         >
@@ -204,7 +226,7 @@ export default function Candidates() {
             </div>
           </div>
 
-          {list.length === 0 ? (
+          {error ? null : list.length === 0 ? (
             <p className="rounded-xl border border-dashed border-zinc-800 px-4 py-6 text-sm text-zinc-500">
               {candidates.length === 0
                 ? "Кандидатов пока нет. Загрузите файл с отобранными сайтами кнопкой «Импорт»."
@@ -216,8 +238,9 @@ export default function Candidates() {
                 <CandidateRow
                   key={c.id}
                   c={c}
-                  busy={busy === c.id}
-                  onStatus={(s) => void setStatus(c, s)}
+                  busy={busy.has(c.id)}
+                  onAction={(a) => void withBusy(c.id, () => update(c.id, statusPatch(c, a, todayISO())))}
+                  onRemove={() => void withBusy(c.id, () => remove(c.id))}
                   onProject={() =>
                     setDraft({
                       c,
@@ -271,6 +294,7 @@ export default function Candidates() {
               )}
             </div>
           )}
+          {importError && <p className="text-sm text-red-400">Не загрузилось: {importError}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={() => setImportOpen(false)} className={btnGhost}>Отмена</button>
             <button type="button" disabled={importing || !parsed?.items.length} onClick={() => void runImport()} className={btnPrimary}>
@@ -285,16 +309,16 @@ export default function Candidates() {
         draft={draft?.data}
         onClose={() => setDraft(null)}
         onCreate={async (payload) => {
-          const res = await addProject(payload);
-          if (res.error || !res.id) return { error: res.error };
-          const link = await update(draft!.c.id, { status: "converted", project_id: res.id });
+          const res = await createProject(payload);
+          if (!res.project) return { error: res.error };
+          const link = await update(draft!.c.id, { status: "converted", project_id: res.project.id });
           setDraft(null);
           // Проект создан; если кандидат не обновился — говорим здесь, а не после перехода
           if (link.error) {
             setActionError(`Проект создан, но кандидат не отмечен: ${link.error}`);
             return { error: null };
           }
-          navigate(`/admin/projects/${res.id}`);
+          navigate(`/admin/projects/${res.project.id}`);
           return { error: null };
         }}
       />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { freshCandidates, parseCandidatesJson, problemList, sortCandidates } from "./candidates";
+import { freshCandidates, parseCandidatesJson, problemList, sortCandidates, statusPatch } from "./candidates";
 
 describe("candidates", () => {
   it("импорт: нормализует ссылку и домен, проблемы списком склеиваются строками", () => {
@@ -54,5 +54,26 @@ describe("candidates", () => {
     expect(sorted.map((c) => c.name)).toEqual(["В", "А", "Г", "Б"]);
     expect(problemList("a\n\n b ")).toEqual(["a", "b"]);
     expect(problemList(null)).toEqual([]);
+  });
+
+  it("почта без параметров mailto, телефон числом, точка в конце домена", () => {
+    const { items } = parseCandidatesJson(
+      JSON.stringify([
+        { name: "А", site_url: "a.ru.", email: "x@y.ru?bcc=evil@z.ru", phone: 79991234567 },
+        { name: "Б", site_url: "b.ru", email: "ok@b.ru" },
+      ]),
+    );
+    expect(items[0]).toMatchObject({ domain: "a.ru", email: null, phone: "79991234567" });
+    expect(items[1].email).toBe("ok@b.ru");
+  });
+
+  it("переходы статусов не теряют дату письма", () => {
+    const today = "2026-10-20";
+    expect(statusPatch({ status: "new", contacted_at: null }, "contacted", today)).toEqual({ status: "contacted", contacted_at: today });
+    expect(statusPatch({ status: "contacted", contacted_at: "2026-10-01" }, "declined", today)).toEqual({ status: "declined", contacted_at: "2026-10-01" });
+    expect(statusPatch({ status: "declined", contacted_at: "2026-10-01" }, "restore", today)).toMatchObject({ status: "contacted", contacted_at: "2026-10-01" });
+    expect(statusPatch({ status: "declined", contacted_at: null }, "restore", today)).toMatchObject({ status: "new" });
+    expect(statusPatch({ status: "contacted", contacted_at: "2026-10-01" }, "restore", today)).toEqual({ status: "new", contacted_at: null });
+    expect(statusPatch({ status: "converted", contacted_at: "2026-10-01" }, "restore", today)).toEqual({ status: "contacted", contacted_at: "2026-10-01", project_id: null });
   });
 });

@@ -40,8 +40,9 @@ export function useCandidates() {
   }, []);
 
   /**
-   * Импорт: домены, которые уже есть в базе, пропускаются. Вставка с
-   * ignoreDuplicates — на случай, если кандидата добавили в другой вкладке.
+   * Импорт: домены, которые уже есть в базе, пропускаются. Вставка пачками
+   * (тело запроса к /api/db ограничено) с ignoreDuplicates — на случай, если
+   * кандидата добавили в другой вкладке. Упала пачка — добавленное раньше остаётся.
    */
   const importMany = useCallback(
     async (items: NewCandidate[]): Promise<{ added: number; skipped: string[]; error: string | null }> => {
@@ -49,14 +50,21 @@ export function useCandidates() {
       if (selErr) return { added: 0, skipped: [], error: selErr.message };
       const { fresh, skipped } = freshCandidates(items, (existing ?? []) as Pick<Candidate, "domain">[]);
       if (fresh.length === 0) return { added: 0, skipped: skipped.map((s) => s.domain), error: null };
-      const { data, error: insErr } = await db
-        .from("candidates")
-        .upsert(fresh, { onConflict: "user_id,domain", ignoreDuplicates: true })
-        .select();
-      if (insErr) return { added: 0, skipped: skipped.map((s) => s.domain), error: insErr.message };
-      const added = (data ?? []) as Candidate[];
+      const added: Candidate[] = [];
+      let insError: string | null = null;
+      for (let i = 0; i < fresh.length; i += 100) {
+        const { data, error: insErr } = await db
+          .from("candidates")
+          .upsert(fresh.slice(i, i + 100), { onConflict: "user_id,domain", ignoreDuplicates: true })
+          .select();
+        if (insErr) {
+          insError = added.length ? `Добавлено ${added.length}, дальше ошибка: ${insErr.message}` : insErr.message;
+          break;
+        }
+        added.push(...((data ?? []) as Candidate[]));
+      }
       setCandidates((prev) => [...prev, ...added]);
-      return { added: added.length, skipped: skipped.map((s) => s.domain), error: null };
+      return { added: added.length, skipped: skipped.map((s) => s.domain), error: insError };
     },
     [],
   );
