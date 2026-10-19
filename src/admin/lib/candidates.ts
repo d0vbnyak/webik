@@ -32,7 +32,8 @@ const str = (v: unknown, max: number): string | null => {
 /** Почта из чужого сайта: только адрес, без «?bcc=…» и пробелов, — иначе mailto: подставит лишнее. */
 function cleanEmail(v: unknown): string | null {
   const e = str(v, 200);
-  return e && /^[^\s@?&#/]+@[^\s@?&#/]+\.[a-z]{2,}$/i.test(e) ? e : null;
+  // Запятая, точка с запятой и %-коды в mailto: добавили бы второго адресата
+  return e && /^[^\s@?&#/,;%:]+@[^\s@?&#/,;%:]+\.(?:[a-z]{2,}|xn--[a-z0-9-]+|[а-яё]{2,})$/i.test(e) ? e : null;
 }
 
 export type ParsedImport = { items: NewCandidate[]; errors: string[] };

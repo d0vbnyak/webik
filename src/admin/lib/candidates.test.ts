@@ -65,6 +65,15 @@ describe("candidates", () => {
     );
     expect(items[0]).toMatchObject({ domain: "a.ru", email: null, phone: "79991234567" });
     expect(items[1].email).toBe("ok@b.ru");
+    const more = parseCandidatesJson(
+      JSON.stringify([
+        { name: "В", site_url: "c.ru", email: "info@окна-ногинск.рф" },
+        { name: "Г", site_url: "d.ru", email: "info@xn--80ak6aa92e.xn--p1ai" },
+        { name: "Д", site_url: "e.ru", email: "a,evil@z.ru" },
+        { name: "Е", site_url: "f.ru", email: "x%40evil.com%2Cinfo@site.ru" },
+      ]),
+    ).items.map((i) => i.email);
+    expect(more).toEqual(["info@окна-ногинск.рф", "info@xn--80ak6aa92e.xn--p1ai", null, null]);
   });
 
   it("переходы статусов не теряют дату письма", () => {
