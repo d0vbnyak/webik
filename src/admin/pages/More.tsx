@@ -1,9 +1,10 @@
 import { Link } from "react-router";
 import type { ReactNode } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { IconArchive, IconClients, IconSettings } from "../components/icons";
+import { IconArchive, IconCandidates, IconClients, IconSettings } from "../components/icons";
 
 const ITEMS: { to: string; label: string; hint: string; icon: ReactNode }[] = [
+  { to: "/admin/candidates", label: "Кандидаты", hint: "фирмы со старыми сайтами — кому написать", icon: <IconCandidates /> },
   { to: "/admin/clients", label: "Клиенты", hint: "контакты для доходов и проектов", icon: <IconClients /> },
   { to: "/admin/archive", label: "Архив лидов", hint: "старая воронка и разобранные заявки", icon: <IconArchive /> },
   { to: "/admin/settings", label: "Настройки", hint: "налог, цели, категории, плагин webik", icon: <IconSettings /> },

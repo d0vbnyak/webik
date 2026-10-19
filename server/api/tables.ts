@@ -86,6 +86,17 @@ export const TABLES: Record<string, TableSpec> = {
     columns: [...base, "project_id", "type", "date", "comment", "created_at"],
     writable: ["project_id", "type", "date", "comment"],
   },
+  candidates: {
+    columns: [
+      ...base, "name", "site_url", "domain", "city", "niche", "phone", "email", "problems", "score", "status",
+      "contacted_at", "note", "project_id", "created_at",
+    ],
+    writable: [
+      "name", "site_url", "domain", "city", "niche", "phone", "email", "problems", "score", "status",
+      "contacted_at", "note", "project_id",
+    ],
+    conflictTargets: [["user_id", "domain"]],
+  },
 };
 
 /**
@@ -100,4 +111,5 @@ export const REFERENCES: Record<string, Record<string, string>> = {
   lead_touches: { lead_id: "leads" },
   projects: { client_id: "clients" },
   project_events: { project_id: "projects" },
+  candidates: { project_id: "projects" },
 };

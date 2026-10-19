@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { useAuth } from "./hooks/useAuth";
 import BottomNav from "./components/BottomNav";
 import RecurringBootstrap from "./components/RecurringBootstrap";
-import { IconArchive, IconClients, IconMoney, IconProjects, IconSettings, IconToday } from "./components/icons";
+import { IconArchive, IconCandidates, IconClients, IconMoney, IconProjects, IconSettings, IconToday } from "./components/icons";
 
 type Item = { to: string; label: string; end?: boolean; icon: ReactNode };
 
@@ -11,6 +11,7 @@ type Item = { to: string; label: string; end?: boolean; icon: ReactNode };
 const MAIN: Item[] = [
   { to: "/admin", end: true, label: "Сегодня", icon: <IconToday /> },
   { to: "/admin/projects", label: "Проекты", icon: <IconProjects /> },
+  { to: "/admin/candidates", label: "Кандидаты", icon: <IconCandidates /> },
   { to: "/admin/money", label: "Деньги", icon: <IconMoney /> },
 ];
 const SECONDARY: Item[] = [

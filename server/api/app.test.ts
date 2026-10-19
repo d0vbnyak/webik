@@ -18,7 +18,7 @@ const json = (r: Response): Promise<any> => r.json(); // eslint-disable-line @ty
 
 beforeAll(async () => {
   db = await createPgliteDb();
-  expect(await migrate(db)).toEqual(["001_init.sql", "002_auth_hardening.sql", "003_totp_lock.sql", "004_tax_deduction.sql", "005_tax_constraints.sql", "006_projects.sql"]);
+  expect(await migrate(db)).toEqual(["001_init.sql", "002_auth_hardening.sql", "003_totp_lock.sql", "004_tax_deduction.sql", "005_tax_constraints.sql", "006_projects.sql", "007_candidates.sql"]);
   expect(await migrate(db)).toEqual([]); // повторный прогон ничего не делает
   await createUser(db, "Sergey@Example.com", PASS);
   await createUser(db, "other@example.com", PASS);
@@ -886,6 +886,38 @@ describe("/api/webik — плагин", () => {
     ]) {
       expect((await pluginPost(body, token)).status).toBe(400);
     }
+  });
+});
+
+describe("кандидаты", () => {
+  const cand = (domain: string, extra: Record<string, unknown> = {}) => ({
+    name: domain, site_url: `https://${domain}/`, domain, ...extra,
+  });
+  const upsert = (cookie: string, values: unknown) =>
+    post("/db", { table: "candidates", action: "upsert", columns: "domain", values, onConflict: "user_id,domain", ignoreDuplicates: true }, cookie);
+
+  it("повтор домена пропускается, у другого пользователя тот же домен — свой", async () => {
+    const cookie = await signIn("sergey@example.com");
+    let res = await upsert(cookie, [cand("old-site.ru"), cand("old-site2.ru")]);
+    expect((await json(res)).data).toHaveLength(2);
+    res = await upsert(cookie, [cand("old-site.ru"), cand("old-site3.ru")]);
+    expect((await json(res)).data.map((r: { domain: string }) => r.domain)).toEqual(["old-site3.ru"]);
+    const other = await signIn("other@example.com");
+    res = await upsert(other, [cand("old-site.ru")]);
+    expect((await json(res)).data).toHaveLength(1);
+  });
+
+  it("ссылка не http(s), чужой проект и неизвестный статус — отказ", async () => {
+    const cookie = await signIn("sergey@example.com");
+    let res = await post("/db", { table: "candidates", action: "insert", values: { ...cand("x1.ru"), site_url: "javascript:alert(1)" } }, cookie);
+    expect(res.status).toBe(400);
+    res = await post("/db", { table: "candidates", action: "insert", values: cand("x2.ru", { status: "hot" }) }, cookie);
+    expect(res.status).toBe(400);
+    const other = await signIn("other@example.com");
+    const foreign = await post("/db", { table: "projects", action: "insert", columns: "id", values: { slug: "foreign", name: "Чужой" } }, other);
+    const projectId = (await json(foreign)).data[0].id;
+    res = await post("/db", { table: "candidates", action: "insert", values: cand("x3.ru", { project_id: projectId }) }, cookie);
+    expect(res.status).toBe(400);
   });
 });
 

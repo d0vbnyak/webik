@@ -68,4 +68,6 @@ function adminApi(mode: string): Plugin {
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), chatApi(mode), adminApi(mode)],
+  // .data — локальная база PGlite и рабочие файлы: dev-сервер их не отдаёт
+  server: { fs: { deny: [".env", ".env.*", "*.{crt,pem}", "**/.data/**"] } },
 }));
