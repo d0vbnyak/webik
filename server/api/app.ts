@@ -123,7 +123,8 @@ export function createApp(opts: AppOptions) {
   app.use("/db", bodyLimit({ maxSize: 2 * 1024 * 1024, onError: tooLarge }));
   app.use("/order", bodyLimit({ maxSize: 16 * 1024, onError: tooLarge }));
   app.use("/ai/*", bodyLimit({ maxSize: 8 * 1024, onError: tooLarge }));
-  app.use("/webik/*", bodyLimit({ maxSize: 8 * 1024, onError: tooLarge }));
+  // state.json целиком: плагин может хранить в нём больше полей, чем нужно админке
+  app.use("/webik/*", bodyLimit({ maxSize: 64 * 1024, onError: tooLarge }));
 
   /**
    * Пользователь по cookie сессии. Браузер может прислать несколько cookie с одним

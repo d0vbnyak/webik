@@ -45,7 +45,8 @@ export default function Projects() {
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const filter = (params.get("stage") as Filter | null) ?? "all";
+  const raw = params.get("stage");
+  const filter: Filter = raw === "closed" || PROJECT_STAGES.some((s) => s.id === raw) ? (raw as Filter) : "all";
   const setFilter = (f: Filter) => setParams(f === "all" ? {} : { stage: f }, { replace: true });
 
   const q = query.trim().toLowerCase();

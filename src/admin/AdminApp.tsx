@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router";
+import { Routes, Route, Navigate, useParams } from "react-router";
 import { AuthProvider } from "./context/AuthContext";
 import { PeriodProvider } from "./context/PeriodContext";
 import RequireAuth from "./RequireAuth";
@@ -28,6 +28,12 @@ import CrmReport from "./pages/CrmReport";
  * «Деньги» (бывшие доходы, расходы, подписки, статистика), справочники.
  * Старая воронка ИИ-автоматизации — «Архив лидов».
  */
+/** Ссылки на карточки лидов из уже отправленных писем: /admin/crm/<id> → архив. */
+function LeadRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/admin/archive/${id ?? ""}`} replace />;
+}
+
 export default function AdminApp() {
   return (
     <AuthProvider>
@@ -62,7 +68,9 @@ export default function AdminApp() {
             <Route path="expenses" element={<Navigate to="/admin/money/expenses" replace />} />
             <Route path="recurring" element={<Navigate to="/admin/money/recurring" replace />} />
             <Route path="stats" element={<Navigate to="/admin/money/stats" replace />} />
-            <Route path="crm/*" element={<Navigate to="/admin/archive" replace />} />
+            <Route path="crm" element={<Navigate to="/admin/archive" replace />} />
+            <Route path="crm/report" element={<Navigate to="/admin/archive/report" replace />} />
+            <Route path="crm/:id" element={<LeadRedirect />} />
           </Route>
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>

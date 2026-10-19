@@ -35,7 +35,7 @@ export function useLeads() {
   }, [load]);
 
   const add = useCallback(async (payload: NewLead): Promise<{ id: string | null; error: string | null }> => {
-    const { data, error: insErr } = await db.from("leads").insert(payload).select().single();
+    const { data, error: insErr } = await db.from("leads").insert({ ...payload, archived: true }).select().single();
     if (insErr) return { id: null, error: insErr.message };
     setLeads((prev) => [...prev, data as Lead]);
     return { id: (data as Lead).id, error: null };
@@ -75,7 +75,8 @@ export function useLeads() {
       const withIds = planned.map((i) => ({ ...i, id: crypto.randomUUID() }));
       const { error: insErr } = await db
         .from("leads")
-        .insert(withIds.map((i) => ({ ...i.lead, id: i.id, stage_changed_at: `${i.stageChangedOn}T12:00:00` })));
+        // archived: лиды, заведённые в архиве, не должны всплывать в «Новых заявках»
+        .insert(withIds.map((i) => ({ ...i.lead, id: i.id, archived: true, stage_changed_at: `${i.stageChangedOn}T12:00:00` })));
       if (insErr) return { added: 0, skippedNames, error: insErr.message };
 
       const touches = withIds.flatMap((item) => item.touches.map((t) => ({ ...t, lead_id: item.id })));

@@ -74,7 +74,7 @@ export function orderSubject(order: Order): string {
 
 /** Текст письма: сама заявка и ссылка на карточку лида. */
 export function orderEmailText({ text, leadId }: OrderNotice): string {
-  const link = leadId ? `Карточка в CRM: ${SITE_URL}/admin/crm/${leadId}` : "В CRM заявка не записалась — ответьте по контакту выше.";
+  const link = leadId ? `Разобрать заявку: ${SITE_URL}/admin` : "В CRM заявка не записалась — ответьте по контакту выше.";
   return `${text}\n\n${link}`;
 }
 

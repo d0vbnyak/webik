@@ -70,6 +70,11 @@ button:focus-visible {
   color: var(--color-zinc-100);
   font-variant-numeric: tabular-nums;
 }
+/* Подложка под админкой — тёмная и при прокрутке за край (iOS) */
+html:has(.admin-root),
+html:has(.admin-root) body {
+  background: #0d0e0b;
+}
 .admin-root ::selection {
   background: color-mix(in srgb, var(--color-brand-green) 35%, transparent);
 }

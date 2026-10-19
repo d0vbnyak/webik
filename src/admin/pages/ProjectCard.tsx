@@ -287,7 +287,7 @@ export default function ProjectCard() {
                         <button
                           type="button"
                           onClick={() => void removeEvent(e.id).then((r) => r.error && setActionError(r.error))}
-                          className="ml-auto text-zinc-600 opacity-100 transition-opacity hover:text-red-400 lg:opacity-0 lg:group-hover:opacity-100"
+                          className="ml-auto text-zinc-600 opacity-100 transition-opacity hover:text-red-400 lg:opacity-0 lg:group-hover:opacity-100 lg:focus:opacity-100"
                           aria-label="Удалить запись"
                         >
                           удалить
@@ -306,7 +306,8 @@ export default function ProjectCard() {
           <Block title="Ссылки" action={<button type="button" className={linkBtn} onClick={openEdit}>Изменить</button>}>
             <dl className="divide-y divide-zinc-800/80 rounded-xl border border-zinc-800/80">
               {LINKS.map((l) => {
-                const url = p[l.key];
+                // Ссылки можно записать и в обход формы — в href только http(s)
+                const url = p[l.key] && /^https?:\/\//i.test(p[l.key]!) ? p[l.key] : null;
                 return (
                   <div key={l.key} className="flex items-center justify-between gap-3 px-4 py-2.5">
                     <dt className="text-sm text-zinc-400">{l.label}</dt>
@@ -478,6 +479,11 @@ export default function ProjectCard() {
                     onChange={(e) => setEditForm({ ...editForm, [f.key]: e.target.value })}
                     className={`${inputCls} mt-1 ${f.mono ? "font-mono text-sm" : ""}`}
                   />
+                )}
+                {f.key === "slug" && p.synced_at && editForm.slug.trim() !== p.slug && (
+                  <span className="mt-1 block text-xs text-amber-400">
+                    Плагин знает проект как «{p.slug}». Переименуйте и папку проекта, иначе плагин заведёт дубль.
+                  </span>
                 )}
               </label>
             ))}

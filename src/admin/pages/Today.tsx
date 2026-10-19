@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useProjects } from "../hooks/useProjects";
-import { useLeads } from "../hooks/useLeads";
 import { useIncomes } from "../hooks/useIncomes";
 import { useReceivables } from "../hooks/useReceivables";
 import { useSettings } from "../hooks/useSettings";
@@ -74,6 +73,22 @@ function InboxRow({ lead, onProject, onArchive, busy }: { lead: Lead; onProject:
   );
 }
 
+/** Новые заявки с сайта и из чата: неразобранные лиды. Архив не грузим. */
+function useInbox() {
+  const [inbox, setInbox] = useState<Lead[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    const { data, error: selErr } = await db.from("leads").select("*").eq("archived", false).order("created_at");
+    if (selErr) return setError(selErr.message);
+    setError(null);
+    setInbox((data ?? []) as Lead[]);
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  return { inbox, error, reload: load };
+}
+
 export default function Today() {
   const today = todayISO();
   const navigate = useNavigate();
@@ -81,7 +96,7 @@ export default function Today() {
   const dateLine = `${WEEKDAYS[new Date(y, m - 1, d).getDay()]}, ${d} ${MONTHS[m - 1]}`;
 
   const { projects, loading, error, add } = useProjects();
-  const leadsHook = useLeads();
+  const inboxHook = useInbox();
   const incomesHook = useIncomes(y, m);
   const receivables = useReceivables();
   const { settings } = useSettings();
@@ -93,7 +108,7 @@ export default function Today() {
 
   const due = projectsDue(projects, today);
   const overdue = due.filter((p) => (p.next_step_date ?? "") < today).length;
-  const inbox = leadsHook.leads.filter((l) => !l.archived);
+  const inbox = inboxHook.inbox;
   const waiting = waitingOnClient(projects);
   const counts = countByStage(projects.filter(isActive));
   const activeCount = projects.filter(isActive).length;
@@ -110,7 +125,7 @@ export default function Today() {
     const { error: updErr } = await db.from("leads").update({ archived: true }).eq("id", lead.id);
     setBusyLead(null);
     if (updErr) return setInboxError(updErr.message);
-    void leadsHook.reload();
+    void inboxHook.reload();
   }
 
   function startProject(lead: Lead) {
@@ -151,6 +166,8 @@ export default function Today() {
       </header>
 
       {error && <p className="mb-4 text-sm text-red-400">Проекты не загрузились: {error}</p>}
+      {inboxHook.error && <p className="mb-4 text-sm text-red-400">Заявки не загрузились: {inboxHook.error}</p>}
+      {inboxError && inbox.length === 0 && <p className="mb-4 text-sm text-red-400">{inboxError}</p>}
 
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-12">
         <div className="space-y-10">
@@ -212,7 +229,7 @@ export default function Today() {
                       <span className={`shrink-0 text-xs tabular-nums ${days >= 7 ? "text-amber-400" : "text-zinc-500"}`}>
                         {days === 0 ? "с сегодня" : `${days} дн.`}
                       </span>
-                      {p.demo_url && (
+                      {p.demo_url && /^https?:\/\//i.test(p.demo_url) && (
                         <a
                           href={p.demo_url}
                           target="_blank"
@@ -292,8 +309,13 @@ export default function Today() {
           const res = await add(payload);
           if (res.error || !res.id) return { error: res.error };
           // Заявка разобрана — уходит в архив, проект открывается
-          await db.from("leads").update({ archived: true }).eq("id", draft!.lead.id);
+          const { error: archErr } = await db.from("leads").update({ archived: true }).eq("id", draft!.lead.id);
           setDraft(null);
+          // Ошибку показываем здесь же: после перехода её бы никто не увидел
+          if (archErr) {
+            setInboxError(`Проект создан, но заявка осталась во входящих: ${archErr.message}. Уберите её кнопкой «В архив».`);
+            return { error: null };
+          }
           navigate(`/admin/projects/${res.id}`);
           return { error: null };
         }}

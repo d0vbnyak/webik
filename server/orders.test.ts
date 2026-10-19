@@ -71,7 +71,7 @@ describe("почта", () => {
         to: "dev.d0vbnyak@gmail.com",
         replyTo: "ivan@mail.ru",
         subject: "Заявка с сайта WebIK — Иван",
-        text: "Новая заявка с сайта WebIK\n\nКарточка в CRM: https://webik.tech/admin/crm/lead-1",
+        text: "Новая заявка с сайта WebIK\n\nРазобрать заявку: https://webik.tech/admin",
       },
     ]);
     expect(JSON.stringify(sent)).not.toContain("app-pass");
