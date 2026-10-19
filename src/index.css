@@ -1,10 +1,11 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Playfair Display", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --color-brand-green: #9fff00;
   --color-bg-base: #EDEEF5;
 }
@@ -39,4 +40,48 @@ button:focus-visible {
   outline: 2px solid var(--color-brand-green);
   outline-offset: 2px;
   border-radius: 2px;
+}
+
+/* ── Админка: «рабочий стол студии» ─────────────────────────────────────────
+   Нейтральные серые Tailwind внутри админки заменены тёплыми с оливковым
+   подтоном — в тон фирменному салатовому. Переопределение переменных, а не
+   новые классы: все экраны админки перекрашиваются разом. Уровни поверхностей:
+   950 — стол, 900 — карточка, 800 — граница и приподнятый слой. */
+.admin-root {
+  --color-zinc-950: #0d0e0b;
+  --color-zinc-900: #151711;
+  --color-zinc-800: #252820;
+  --color-zinc-700: #353930;
+  --color-zinc-600: #4b5045;
+  --color-zinc-500: #787d6f;
+  --color-zinc-400: #9fa395;
+  --color-zinc-300: #c5c9bb;
+  --color-zinc-200: #dcdfd2;
+  --color-zinc-100: #eceee4;
+  /* «ждём клиента» — охра, «просрочено» — кирпич: тёплые, не кислотные */
+  --color-amber-300: #e2c27a;
+  --color-amber-400: #d4a84b;
+  --color-red-400: #e5735f;
+  --color-red-500: #e5604d;
+  --color-red-700: #9c3b2c;
+  --color-red-900: #5a2219;
+  --color-red-950: #2a120d;
+  background: var(--color-zinc-950);
+  color: var(--color-zinc-100);
+  font-variant-numeric: tabular-nums;
+}
+/* Подложка под админкой — тёмная и при прокрутке за край (iOS) */
+html:has(.admin-root),
+html:has(.admin-root) body {
+  background: #0d0e0b;
+}
+.admin-root ::selection {
+  background: color-mix(in srgb, var(--color-brand-green) 35%, transparent);
+}
+/* Горизонтальные ленты (фильтры, вкладки) листаются пальцем — полоса прокрутки не нужна */
+.admin-root .scroll-x {
+  scrollbar-width: none;
+}
+.admin-root .scroll-x::-webkit-scrollbar {
+  display: none;
 }

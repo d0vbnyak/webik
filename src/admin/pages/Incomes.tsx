@@ -4,6 +4,7 @@ import { useIncomes } from "../hooks/useIncomes";
 import { useReceivables } from "../hooks/useReceivables";
 import { useCategories } from "../hooks/useCategories";
 import { useClients } from "../hooks/useClients";
+import { useProjects } from "../hooks/useProjects";
 import type { Income, PaymentStatus } from "../lib/types";
 import { formatMoney, formatDate, todayISO } from "../lib/dates";
 import { remainingToPay, isOverdue, normalizePaidAmount } from "../lib/finance";
@@ -27,6 +28,7 @@ type FormState = {
   date: string;
   category: string;
   client_id: string;
+  project_id: string;
   comment: string;
   payment_status: PaymentStatus;
   paid_amount: number;
@@ -38,6 +40,7 @@ const emptyForm = (category: string): FormState => ({
   date: todayISO(),
   category,
   client_id: "",
+  project_id: "",
   comment: "",
   payment_status: "unpaid",
   paid_amount: 0,
@@ -53,6 +56,7 @@ export default function Incomes() {
   const receivables = useReceivables();
   const { byType, addCategory } = useCategories();
   const { clients } = useClients();
+  const { projects } = useProjects();
   const incomeCats = byType("income");
 
   const [filter, setFilter] = useState<Filter>("all");
@@ -77,6 +81,7 @@ export default function Incomes() {
       date: i.date,
       category: i.category,
       client_id: i.client_id ?? "",
+      project_id: i.project_id ?? "",
       comment: i.comment ?? "",
       payment_status: i.payment_status,
       paid_amount: i.paid_amount,
@@ -100,6 +105,7 @@ export default function Incomes() {
       date: form.date,
       category: form.category,
       client_id: form.client_id || null,
+      project_id: form.project_id || null,
       payment_status: form.payment_status,
       paid_amount: paid,
       due_date: form.due_date || null,
@@ -304,6 +310,21 @@ export default function Incomes() {
               ))}
             </select>
           </div>
+          {projects.length > 0 && (
+            <div>
+              <label className={labelCls}>Проект</label>
+              <select
+                value={form.project_id}
+                onChange={(e) => setForm((f) => ({ ...f, project_id: e.target.value }))}
+                className={`${inputCls} mt-1`}
+              >
+                <option value="">— не указан —</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className={labelCls}>Статус оплаты</label>
             <select

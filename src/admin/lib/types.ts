@@ -1,5 +1,8 @@
 // Доменные типы админ-панели. Соответствуют таблицам базы (см. server/db/migrations).
 
+import type { ProjectStage } from "../../../shared/projects";
+export type { ProjectStage };
+
 export type PaymentStatus = "paid" | "unpaid" | "partial";
 export type CategoryType = "expense" | "income";
 
@@ -35,6 +38,7 @@ export interface Income {
   paid_amount: number;
   due_date: string | null; // YYYY-MM-DD
   comment: string | null;
+  project_id: string | null; // проект редизайна, за который платёж
   created_at: string;
 }
 
@@ -129,6 +133,7 @@ export interface Lead {
   deal_amount: number | null; // ожидаемая сумма сделки
   client_id: string | null;
   stage_changed_at: string;
+  archived: boolean; // старые лиды под ИИ-автоматизацию и разобранные заявки
   created_at: string;
 }
 
@@ -144,6 +149,45 @@ export interface LeadTouch {
   created_at: string;
 }
 
+// ---- Проекты редизайна (этапы плагина webik) ----
+
+export interface Project {
+  id: string;
+  user_id: string;
+  slug: string;
+  name: string;
+  source_url: string | null; // старый сайт
+  stage: ProjectStage;
+  design_artifact_url: string | null; // макет в Claude Design
+  demo_url: string | null;
+  prod_url: string | null;
+  client_id: string | null;
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+  telegram_username: string | null;
+  amount: number | null; // стоимость работ
+  next_step: string | null;
+  next_step_date: string | null; // YYYY-MM-DD
+  note: string | null;
+  closed: boolean; // закрыт без выкладки
+  stage_changed_at: string;
+  synced_at: string | null; // последнее обновление от плагина
+  created_at: string;
+}
+
+export type ProjectEventType = "stage" | "sync" | "call" | "message" | "meeting" | "note";
+
+export interface ProjectEvent {
+  id: string;
+  user_id: string;
+  project_id: string;
+  type: ProjectEventType;
+  date: string; // YYYY-MM-DD
+  comment: string | null;
+  created_at: string;
+}
+
 // Insert-типы: серверные поля (id/user_id/created_at) не передаём — их проставляет БД
 // (user_id = auth.uid() по умолчанию).
 export type NewClient = Omit<Client, "id" | "user_id" | "created_at">;
@@ -152,5 +196,7 @@ export type NewIncome = Omit<Income, "id" | "user_id" | "created_at">;
 export type NewRecurringExpense = Omit<RecurringExpense, "id" | "user_id" | "created_at">;
 export type NewCategory = Omit<Category, "id" | "user_id">;
 export type NewGoal = Omit<Goal, "id" | "user_id">;
-export type NewLead = Omit<Lead, "id" | "user_id" | "created_at" | "stage_changed_at">;
+export type NewLead = Omit<Lead, "id" | "user_id" | "created_at" | "stage_changed_at" | "archived"> & { archived?: boolean };
 export type NewLeadTouch = Omit<LeadTouch, "id" | "user_id" | "created_at">;
+export type NewProject = Pick<Project, "slug" | "name"> &
+  Partial<Omit<Project, "id" | "user_id" | "created_at" | "synced_at" | "slug" | "name">>;

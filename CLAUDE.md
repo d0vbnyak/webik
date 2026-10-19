@@ -71,7 +71,13 @@ Node.js ставился через winget: если сессия не види�
 
 ## Architecture Overview
 
-- **Фронтенд** — React 19 + Vite + Tailwind + TypeScript (`src/`). Админка — `src/admin`.
+- **Фронтенд** — React 19 + Vite + Tailwind + TypeScript (`src/`). Админка — `src/admin`:
+  студия редизайна — «Сегодня», «Проекты» (этапы плагина webik), «Деньги»,
+  старая воронка ИИ-автоматизации — «Архив лидов». Палитра админки — переопределение
+  серых Tailwind в `.admin-root` (`src/index.css`).
+- **Плагин webik → админка** — `POST /api/webik/projects` по токену из настроек,
+  `server/api/webik.ts`, общие правила этапов — `shared/projects.ts`. Протокол —
+  `docs/webik-plugin-sync.md`.
 - **Сервер** — Hono + PostgreSQL (`server/`): `main.ts` — прод (API, статика, чат),
   `api/` — API админки и формы заявки, `db/migrations/` — миграции, применяются при
   старте (применённую миграцию не править, новое — следующим файлом).

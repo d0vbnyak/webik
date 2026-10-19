@@ -27,7 +27,7 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-4 text-zinc-100">
+    <div className="admin-root flex min-h-screen items-center justify-center bg-zinc-950 px-4 text-zinc-100">
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900 p-6"

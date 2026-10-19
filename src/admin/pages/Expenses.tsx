@@ -70,7 +70,7 @@ export default function Expenses() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-semibold tracking-tight">Расходы</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <Link to="/admin/recurring" className={btnGhost}>
+          <Link to="/admin/money/recurring" className={btnGhost}>
             Повторяющиеся
           </Link>
           <MonthSwitcher />

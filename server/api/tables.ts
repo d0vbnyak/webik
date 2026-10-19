@@ -32,8 +32,8 @@ export const TABLES: Record<string, TableSpec> = {
     writable: ["amount", "date", "category", "comment", "recurring_id"],
   },
   incomes: {
-    columns: [...base, "amount", "date", "category", "client_id", "payment_status", "paid_amount", "due_date", "comment", "created_at"],
-    writable: ["amount", "date", "category", "client_id", "payment_status", "paid_amount", "due_date", "comment"],
+    columns: [...base, "amount", "date", "category", "client_id", "payment_status", "paid_amount", "due_date", "comment", "project_id", "created_at"],
+    writable: ["amount", "date", "category", "client_id", "payment_status", "paid_amount", "due_date", "comment", "project_id"],
   },
   categories: {
     columns: [...base, "type", "name"],
@@ -55,19 +55,36 @@ export const TABLES: Record<string, TableSpec> = {
       ...base, "company", "inn", "city", "website", "email", "phone", "contact_name", "telegram_username",
       "other_channels", "business", "hook", "variant", "first_line", "priority", "source", "stage",
       "reached_stage", "lost_reason", "next_step", "next_step_date", "deal_amount", "client_id",
-      "stage_changed_at", "created_at",
+      "stage_changed_at", "archived", "created_at",
     ],
     // id можно задать при вставке: импорт сам генерирует id, чтобы привязать касания
     writable: [
       "id", "company", "inn", "city", "website", "email", "phone", "contact_name", "telegram_username",
       "other_channels", "business", "hook", "variant", "first_line", "priority", "source", "stage",
       "reached_stage", "lost_reason", "next_step", "next_step_date", "deal_amount", "client_id",
-      "stage_changed_at",
+      "stage_changed_at", "archived",
     ],
   },
   lead_touches: {
     columns: [...base, "lead_id", "type", "date", "comment", "created_at"],
     writable: ["lead_id", "type", "date", "comment"],
+  },
+  projects: {
+    columns: [
+      ...base, "slug", "name", "source_url", "stage", "design_artifact_url", "demo_url", "prod_url", "client_id",
+      "contact_name", "phone", "email", "telegram_username", "amount", "next_step", "next_step_date", "note",
+      "closed", "stage_changed_at", "synced_at", "created_at",
+    ],
+    // synced_at пишет только приём от плагина (/api/webik/projects)
+    writable: [
+      "slug", "name", "source_url", "stage", "design_artifact_url", "demo_url", "prod_url", "client_id",
+      "contact_name", "phone", "email", "telegram_username", "amount", "next_step", "next_step_date", "note",
+      "closed", "stage_changed_at",
+    ],
+  },
+  project_events: {
+    columns: [...base, "project_id", "type", "date", "comment", "created_at"],
+    writable: ["project_id", "type", "date", "comment"],
   },
 };
 
@@ -78,7 +95,9 @@ export const TABLES: Record<string, TableSpec> = {
  */
 export const REFERENCES: Record<string, Record<string, string>> = {
   expenses: { recurring_id: "recurring_expenses" },
-  incomes: { client_id: "clients" },
+  incomes: { client_id: "clients", project_id: "projects" },
   leads: { client_id: "clients" },
   lead_touches: { lead_id: "leads" },
+  projects: { client_id: "clients" },
+  project_events: { project_id: "projects" },
 };

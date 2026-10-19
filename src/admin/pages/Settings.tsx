@@ -6,6 +6,7 @@ import { usePeriod } from "../context/PeriodContext";
 import type { CategoryType } from "../lib/types";
 import { formatMoney, monthLabel } from "../lib/dates";
 import Card from "../components/Card";
+import PluginTokenCard from "../components/PluginTokenCard";
 import MoneyInput from "../components/MoneyInput";
 import Spinner from "../components/Spinner";
 import { inputCls, labelCls, btnPrimary, btnGhost } from "../components/controls";
@@ -266,6 +267,8 @@ export default function Settings() {
           </p>
         )}
       </Card>
+
+      <PluginTokenCard />
 
       {/* Категории */}
       <Card>

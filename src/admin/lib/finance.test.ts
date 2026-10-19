@@ -5,7 +5,7 @@ import { remainingToPay, isOverdue, taxWithDeduction, normalizePaidAmount } from
 const inc = (p: Partial<Income>): Income => ({
   id: "1", user_id: "u", amount: 1000, date: "2026-06-01", category: "Веб",
   client_id: null, payment_status: "unpaid", paid_amount: 0, due_date: null,
-  comment: null, created_at: "", ...p,
+  comment: null, project_id: null, created_at: "", ...p,
 });
 
 describe("remainingToPay", () => {
