@@ -68,4 +68,7 @@ function adminApi(mode: string): Plugin {
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), chatApi(mode), adminApi(mode)],
+  // Список заменяет значения Vite по умолчанию, поэтому .git и .env перечислены явно.
+  // .data — локальная база PGlite и рабочие файлы: dev-сервер их не отдаёт
+  server: { fs: { deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "**/.data/**"] } },
 }));

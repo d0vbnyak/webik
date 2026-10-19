@@ -10,7 +10,7 @@ const NAV: Item[] = [
   { to: "/admin", end: true, label: "Сегодня", icon: <IconToday /> },
   { to: "/admin/projects", label: "Проекты", icon: <IconProjects /> },
   { to: "/admin/money", label: "Деньги", icon: <IconMoney /> },
-  { to: "/admin/more", label: "Ещё", icon: <IconMore />, also: ["/admin/clients", "/admin/archive", "/admin/settings"] },
+  { to: "/admin/more", label: "Ещё", icon: <IconMore />, also: ["/admin/candidates", "/admin/clients", "/admin/archive", "/admin/settings"] },
 ];
 
 export default function BottomNav() {

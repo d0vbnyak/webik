@@ -188,6 +188,29 @@ export interface ProjectEvent {
   created_at: string;
 }
 
+// ---- Кандидаты на редизайн (холодный поиск) ----
+
+export type CandidateStatus = "new" | "contacted" | "declined" | "converted";
+
+export interface Candidate {
+  id: string;
+  user_id: string;
+  name: string;
+  site_url: string;
+  domain: string; // без www, по нему отсекаются дубли
+  city: string | null;
+  niche: string | null;
+  phone: string | null;
+  email: string | null;
+  problems: string | null; // что не так с сайтом, по пунктам через перевод строки
+  score: number | null; // балл устарелости из отбора
+  status: CandidateStatus;
+  contacted_at: string | null; // YYYY-MM-DD
+  note: string | null;
+  project_id: string | null;
+  created_at: string;
+}
+
 // Insert-типы: серверные поля (id/user_id/created_at) не передаём — их проставляет БД
 // (user_id = auth.uid() по умолчанию).
 export type NewClient = Omit<Client, "id" | "user_id" | "created_at">;
@@ -198,5 +221,6 @@ export type NewCategory = Omit<Category, "id" | "user_id">;
 export type NewGoal = Omit<Goal, "id" | "user_id">;
 export type NewLead = Omit<Lead, "id" | "user_id" | "created_at" | "stage_changed_at" | "archived"> & { archived?: boolean };
 export type NewLeadTouch = Omit<LeadTouch, "id" | "user_id" | "created_at">;
+export type NewCandidate = Omit<Candidate, "id" | "user_id" | "created_at">;
 export type NewProject = Pick<Project, "slug" | "name"> &
   Partial<Omit<Project, "id" | "user_id" | "created_at" | "synced_at" | "slug" | "name">>;

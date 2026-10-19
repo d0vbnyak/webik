@@ -7,6 +7,22 @@ import type { WriteResult } from "./useLeads";
 
 type ProjectPatch = Partial<Omit<Project, "id" | "user_id" | "created_at" | "synced_at">>;
 
+/** Новый проект и запись о нём в журнал. Без загрузки списка — для экранов, где он не нужен. */
+export async function createProject(payload: NewProject): Promise<{ project: Project | null; error: string | null }> {
+  const { data, error: insErr } = await db.from("projects").insert(payload).select().single();
+  if (insErr) {
+    return { project: null, error: insErr.code === "23505" ? `Проект со slug «${payload.slug}» уже есть` : insErr.message };
+  }
+  const created = data as Project;
+  await db.from("project_events").insert({
+    project_id: created.id,
+    type: "stage",
+    date: todayISO(),
+    comment: `Проект заведён вручную на этапе «${projectStageLabel(created.stage)}»`,
+  });
+  return { project: created, error: null };
+}
+
 /** Все проекты. Ближайший шаг выше, без шага — в конце. */
 export function useProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -31,19 +47,10 @@ export function useProjects() {
   }, [load]);
 
   const add = useCallback(async (payload: NewProject): Promise<{ id: string | null; error: string | null }> => {
-    const { data, error: insErr } = await db.from("projects").insert(payload).select().single();
-    if (insErr) {
-      return { id: null, error: insErr.code === "23505" ? `Проект со slug «${payload.slug}» уже есть` : insErr.message };
-    }
-    const created = data as Project;
-    setProjects((prev) => [...prev, created]);
-    await db.from("project_events").insert({
-      project_id: created.id,
-      type: "stage",
-      date: todayISO(),
-      comment: `Проект заведён вручную на этапе «${projectStageLabel(created.stage)}»`,
-    });
-    return { id: created.id, error: null };
+    const { project, error: addErr } = await createProject(payload);
+    if (!project) return { id: null, error: addErr };
+    setProjects((prev) => [...prev, project]);
+    return { id: project.id, error: null };
   }, []);
 
   return { projects, loading, error, add, reload: load };

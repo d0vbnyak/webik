@@ -16,6 +16,7 @@ import Clients from "./pages/Clients";
 import Stats from "./pages/Stats";
 import Settings from "./pages/Settings";
 import More from "./pages/More";
+import Candidates from "./pages/Candidates";
 import Crm from "./pages/Crm";
 import LeadCard from "./pages/LeadCard";
 import CrmReport from "./pages/CrmReport";
@@ -50,6 +51,7 @@ export default function AdminApp() {
             <Route index element={<Today />} />
             <Route path="projects" element={<Projects />} />
             <Route path="projects/:id" element={<ProjectCard />} />
+            <Route path="candidates" element={<Candidates />} />
             <Route path="money" element={<Money />}>
               <Route index element={<MoneyOverview />} />
               <Route path="incomes" element={<Incomes />} />
