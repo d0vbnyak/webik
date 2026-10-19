@@ -90,7 +90,7 @@ export default function LeadCard() {
   if (!lead) {
     return (
       <div className="py-10 text-center text-sm text-zinc-500">
-        Лид не найден. <Link to="/admin/crm" className="text-brand-green">К воронке</Link>
+        Лид не найден. <Link to="/admin/archive" className="text-brand-green">К архиву</Link>
       </div>
     );
   }
@@ -243,7 +243,7 @@ export default function LeadCard() {
   async function deleteLead() {
     const res = await remove();
     if (res.error) setActionError(res.error);
-    else navigate("/admin/crm");
+    else navigate("/admin/archive");
   }
 
   async function copyFirstLine() {
@@ -281,8 +281,8 @@ export default function LeadCard() {
 
   return (
     <div className="space-y-4">
-      <Link to="/admin/crm" className="text-sm text-zinc-400 transition hover:text-zinc-200">
-        ← Воронка
+      <Link to="/admin/archive" className="text-sm text-zinc-400 transition hover:text-zinc-200">
+        ← Архив лидов
       </Link>
 
       <div className="flex flex-wrap items-start justify-between gap-3">

@@ -122,7 +122,7 @@ export default function Crm() {
     setSaving(false);
     if (res.error) return setFormError(res.error);
     setOpen(false);
-    if (res.id) navigate(`/admin/crm/${res.id}`);
+    if (res.id) navigate(`/admin/archive/${res.id}`);
   }
 
   function openImport() {
@@ -173,9 +173,12 @@ export default function Crm() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">Воронка</h1>
+        <div>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">Архив лидов</h1>
+          <p className="mt-1 text-sm text-zinc-500">Воронка до перехода на редизайн и разобранные заявки с сайта. Новые проекты — в «Проектах».</p>
+        </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/admin/crm/report" className={btnGhost}>
+          <Link to="/admin/archive/report" className={btnGhost}>
             Отчёт
           </Link>
           <button type="button" onClick={openImport} className={btnGhost}>
@@ -209,7 +212,7 @@ export default function Crm() {
                   return (
                     <li key={l.id}>
                       <Link
-                        to={`/admin/crm/${l.id}`}
+                        to={`/admin/archive/${l.id}`}
                         className={`block rounded-lg border px-3 py-2 transition hover:border-zinc-600 ${
                           due.overdue ? "border-red-900/60 bg-red-950/20" : "border-zinc-800 bg-zinc-950/40"
                         }`}
@@ -398,7 +401,7 @@ function LeadRow({ lead: l, today }: { lead: Lead; today: string }) {
   return (
     <li>
       <Link
-        to={`/admin/crm/${l.id}`}
+        to={`/admin/archive/${l.id}`}
         className="block rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 transition hover:border-zinc-600"
       >
         <div className="flex items-center justify-between gap-2">

@@ -7,6 +7,8 @@
  *   POST /api/db            описание запроса (query.ts) → { data, error }
  *   POST /api/order         заявка с сайта { name, contact, task, details } → CRM (+ Telegram)
  *   POST /api/ai/opener     { leadId } → черновик первой строки письма по сайту лида (server/ai/opener.ts)
+ *   POST /api/webik/projects  state.json проекта от плагина webik, вход по токену (server/api/webik.ts)
+ *   GET|POST|DELETE /api/webik/token  токен плагина: есть ли / выпустить новый / отозвать
  *
  * Защита от CSRF: cookie с SameSite=Strict, и каждый POST обязан нести
  * заголовок X-WebIK: 1 — чужой сайт не может выставить его без CORS-разрешения.
@@ -57,6 +59,8 @@ import { OrderLimiter, crmOrderSaver, submitOrder, type OrderNotifier, type Orde
 import { validateOrder } from "../../shared/order";
 import { TELEGRAM_HANDLE } from "../../shared/contacts";
 import { OpenerError, type Opener } from "../ai/opener";
+import { issueToken, revokeToken, syncProject, tokenInfo, tokenUser } from "./webik";
+import { parsePluginUpdate } from "../../shared/projects";
 
 export type AppOptions = {
   db: Db;
@@ -119,6 +123,7 @@ export function createApp(opts: AppOptions) {
   app.use("/db", bodyLimit({ maxSize: 2 * 1024 * 1024, onError: tooLarge }));
   app.use("/order", bodyLimit({ maxSize: 16 * 1024, onError: tooLarge }));
   app.use("/ai/*", bodyLimit({ maxSize: 8 * 1024, onError: tooLarge }));
+  app.use("/webik/*", bodyLimit({ maxSize: 8 * 1024, onError: tooLarge }));
 
   /**
    * Пользователь по cookie сессии. Браузер может прислать несколько cookie с одним
@@ -237,6 +242,7 @@ export function createApp(opts: AppOptions) {
   };
   app.use("/db", requireUser);
   app.use("/ai/*", requireUser);
+  app.use("/webik/token", requireUser);
 
   app.post("/db", async (c) => {
     const userId = c.get("user").id;
@@ -315,6 +321,24 @@ export function createApp(opts: AppOptions) {
       console.error("[api/ai/opener]", (e as Error).message);
       return c.json({ error: "ИИ сейчас не отвечает — попробуйте через минуту" }, 502);
     }
+  });
+
+  // Токен плагина: выпускается и отзывается только из админки, по сессии
+  app.get("/webik/token", async (c) => c.json({ info: await tokenInfo(db, c.get("user").id) }));
+  app.post("/webik/token", async (c) => c.json({ token: await issueToken(db, c.get("user").id) }));
+  app.delete("/webik/token", async (c) => {
+    await revokeToken(db, c.get("user").id);
+    return c.json({ ok: true });
+  });
+
+  // Обновление проекта от плагина. Вход — по токену, cookie не используются
+  app.post("/webik/projects", async (c) => {
+    const userId = await tokenUser(db, c.req.header("authorization"));
+    if (!userId) return c.json({ error: "Неверный или отозванный токен" }, 401);
+    const update = parsePluginUpdate(await readJson(c));
+    if ("error" in update) return c.json({ error: update.error }, 400);
+    const result = await syncProject(db, userId, update);
+    return c.json(result, result.created ? 201 : 200);
   });
 
   app.notFound((c) => c.json({ error: "Не найдено" }, 404));

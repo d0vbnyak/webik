@@ -1,4 +1,3 @@
-import { Link } from "react-router";
 import { usePeriod } from "../context/PeriodContext";
 import { useIncomes } from "../hooks/useIncomes";
 import { useExpenses } from "../hooks/useExpenses";
@@ -6,9 +5,7 @@ import { useReceivables } from "../hooks/useReceivables";
 import { useSettings } from "../hooks/useSettings";
 import { useGoals } from "../hooks/useGoals";
 import { useRecurring } from "../hooks/useRecurring";
-import { useLeads } from "../hooks/useLeads";
 import { useReceivedBefore } from "../hooks/useReceivedBefore";
-import { dueToday, pluralDeals } from "../lib/crm";
 import { formatMoney, formatDate, monthLabel, todayISO } from "../lib/dates";
 import { remainingToPay, isOverdue, taxWithDeduction } from "../lib/finance";
 import { shouldRemind, daysUntil } from "../lib/recurring";
@@ -18,7 +15,7 @@ import ProgressBar from "../components/ProgressBar";
 import Card from "../components/Card";
 import Spinner from "../components/Spinner";
 
-export default function Dashboard() {
+export default function MoneyOverview() {
   const today = todayISO();
   const { year, month } = usePeriod();
   const incomesHook = useIncomes(year, month);
@@ -27,7 +24,6 @@ export default function Dashboard() {
   const { settings, loading: settingsLoading } = useSettings();
   const { getGoal } = useGoals();
   const { recurring } = useRecurring();
-  const leadsHook = useLeads();
   const receivedBefore = useReceivedBefore(year, month);
 
   // Карточку «На налог» нельзя рисовать до настроек и истории доходов: без них
@@ -70,14 +66,12 @@ export default function Dashboard() {
     .slice(0, 6);
 
   const reminders = recurring.filter((r) => shouldRemind(r, today));
-  const crmToday = dueToday(leadsHook.leads, today);
-  const crmOverdue = crmToday.filter((l) => (l.next_step_date ?? "") < today).length;
 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Дашборд <span className="text-sm font-normal text-zinc-500">· {monthLabel(year, month)}</span>
+          Деньги <span className="text-sm font-normal text-zinc-500">· {monthLabel(year, month)}</span>
         </h1>
         <MonthSwitcher />
       </div>
@@ -99,26 +93,6 @@ export default function Dashboard() {
               tone={receivedBefore.error ? "text-amber-400" : undefined}
             />
           </div>
-
-          <Link to="/admin/crm" className="block">
-            <Card className="transition hover:border-zinc-600">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-base font-semibold">Воронка на сегодня</h2>
-                  <p className="mt-0.5 text-sm text-zinc-400">
-                    {leadsHook.loading
-                      ? "…"
-                      : crmToday.length === 0
-                        ? "Дел по лидам нет"
-                        : pluralDeals(crmToday.length) + (crmOverdue ? ` · просрочено: ${crmOverdue}` : "")}
-                  </p>
-                </div>
-                <span className={`font-display text-2xl font-semibold ${crmOverdue ? "text-red-400" : "text-brand-green"}`}>
-                  {leadsHook.loading ? "" : crmToday.length}
-                </span>
-              </div>
-            </Card>
-          </Link>
 
           <Card>
             <h2 className="mb-3 font-display text-base font-semibold">Цель по доходу</h2>

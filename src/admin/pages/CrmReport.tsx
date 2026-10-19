@@ -55,8 +55,8 @@ export default function CrmReport() {
 
   return (
     <div className="space-y-4">
-      <Link to="/admin/crm" className="text-sm text-zinc-400 transition hover:text-zinc-200">
-        ← Воронка
+      <Link to="/admin/archive" className="text-sm text-zinc-400 transition hover:text-zinc-200">
+        ← Архив лидов
       </Link>
       <h1 className="font-display text-2xl font-semibold tracking-tight">Отчёт по воронке</h1>
 

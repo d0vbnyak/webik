@@ -18,7 +18,7 @@ const json = (r: Response): Promise<any> => r.json(); // eslint-disable-line @ty
 
 beforeAll(async () => {
   db = await createPgliteDb();
-  expect(await migrate(db)).toEqual(["001_init.sql", "002_auth_hardening.sql", "003_totp_lock.sql", "004_tax_deduction.sql", "005_tax_constraints.sql"]);
+  expect(await migrate(db)).toEqual(["001_init.sql", "002_auth_hardening.sql", "003_totp_lock.sql", "004_tax_deduction.sql", "005_tax_constraints.sql", "006_projects.sql"]);
   expect(await migrate(db)).toEqual([]); // повторный прогон ничего не делает
   await createUser(db, "Sergey@Example.com", PASS);
   await createUser(db, "other@example.com", PASS);
@@ -781,6 +781,111 @@ describe("/api/ai/opener", () => {
     withOpener(null);
     res = await post("/ai/opener", { leadId: id }, cookie);
     expect(res.status).toBe(503);
+  });
+});
+
+describe("/api/webik — плагин", () => {
+  const pluginPost = (body: unknown, token?: string, csrf = true) =>
+    app.request("/api/webik/projects", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(csrf ? { "x-webik": "1" } : {}),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  const issue = async (cookie: string) => {
+    const res = await post("/webik/token", {}, cookie);
+    expect(res.status).toBe(200);
+    return (await json(res)).token as string;
+  };
+  const project = async (cookie: string, slug: string) => {
+    const res = await post("/db", { table: "projects", action: "select", columns: "*", filters: [{ column: "slug", op: "eq", value: slug }] }, cookie);
+    return (await json(res)).data[0];
+  };
+  const events = async (cookie: string, projectId: string) => {
+    const res = await post("/db", { table: "project_events", action: "select", columns: "*", filters: [{ column: "project_id", op: "eq", value: projectId }] }, cookie);
+    return (await json(res)).data as { type: string; comment: string }[];
+  };
+
+  it("токен выпускается только по сессии, в базе — хеш, показывается один раз", async () => {
+    expect((await post("/webik/token", {})).status).toBe(401);
+    const cookie = await signIn("sergey@example.com");
+    const token = await issue(cookie);
+    expect(isTokenFormat(token)).toBe(true);
+    const stored = await db.query<{ id: string }>("select id from api_tokens");
+    expect(stored.map((r) => r.id)).not.toContain(token);
+    const info = await json(await app.request("/api/webik/token", { headers: { cookie } }));
+    expect(info.info.created_at).toBeTruthy();
+    expect(JSON.stringify(info)).not.toContain(token);
+  });
+
+  it("без токена, с мусором, без X-WebIK — отказ; после отзыва и перевыпуска старый не работает", async () => {
+    const state = { slug: "stroymir", stage: "audited" };
+    expect((await pluginPost(state)).status).toBe(401);
+    expect((await pluginPost(state, "x".repeat(43))).status).toBe(401);
+    const cookie = await signIn("sergey@example.com");
+    const first = await issue(cookie);
+    expect((await pluginPost(state, first, false)).status).toBe(403);
+    const second = await issue(cookie);
+    expect((await pluginPost(state, first)).status).toBe(401);
+    expect((await pluginPost(state, second)).status).toBeLessThan(300);
+    const del = await app.request("/api/webik/token", { method: "DELETE", headers: { cookie, "x-webik": "1" } });
+    expect(del.status).toBe(200);
+    expect((await pluginPost(state, second)).status).toBe(401);
+  });
+
+  it("state.json создаёт проект, повтор обновляет; смена этапа — в журнал; пустые ссылки не стирают", async () => {
+    const cookie = await signIn("sergey@example.com");
+    const token = await issue(cookie);
+    let res = await pluginPost({ slug: "zerno", stage: "audited", source_url: "https://www.zerno-cafe.ru/", updated: "2026-10-19" }, token);
+    expect(res.status).toBe(201);
+    let p = await project(cookie, "zerno");
+    expect(p).toMatchObject({ name: "zerno-cafe.ru", stage: "audited", source_url: "https://www.zerno-cafe.ru/" });
+    expect(p.synced_at).toBeTruthy();
+
+    res = await pluginPost({ slug: "zerno", stage: "demo", demo_url: "https://zerno.demo.webik.tech", source_url: null }, token);
+    expect(res.status).toBe(200);
+    p = await project(cookie, "zerno");
+    expect(p).toMatchObject({ stage: "demo", demo_url: "https://zerno.demo.webik.tech/", source_url: "https://www.zerno-cafe.ru/" });
+    expect((await events(cookie, p.id)).map((e) => e.comment)).toEqual([
+      "Плагин: проект создан на этапе «Аудит»",
+      "Плагин: Аудит → Демо",
+    ]);
+
+    // Тот же этап — без новой записи в журнале
+    await pluginPost({ slug: "zerno", stage: "demo" }, token);
+    expect(await events(cookie, p.id)).toHaveLength(2);
+  });
+
+  it("проект на проде плагин назад не откатывает; проекты разных пользователей не пересекаются", async () => {
+    const cookie = await signIn("sergey@example.com");
+    const token = await issue(cookie);
+    await pluginPost({ slug: "lux", stage: "demo" }, token);
+    const p = await project(cookie, "lux");
+    await post("/db", { table: "projects", action: "update", values: { stage: "prod" }, filters: [{ column: "id", op: "eq", value: p.id }] }, cookie);
+    await pluginPost({ slug: "lux", stage: "built" }, token);
+    expect((await project(cookie, "lux")).stage).toBe("prod");
+
+    const other = await signIn("other@example.com");
+    const otherToken = await issue(other);
+    expect((await pluginPost({ slug: "lux", stage: "audited" }, otherToken)).status).toBe(201);
+    expect((await project(cookie, "lux")).stage).toBe("prod");
+    expect((await project(other, "lux")).stage).toBe("audited");
+  });
+
+  it("плохой slug, этап «прод» или чужая схема ссылки — 400", async () => {
+    const cookie = await signIn("sergey@example.com");
+    const token = await issue(cookie);
+    for (const body of [
+      { slug: "../etc", stage: "audited" },
+      { slug: "ok", stage: "prod" },
+      { slug: "ok", stage: "demo", demo_url: "javascript:alert(1)" },
+      [1, 2],
+    ]) {
+      expect((await pluginPost(body, token)).status).toBe(400);
+    }
   });
 });
 
