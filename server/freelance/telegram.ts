@@ -30,7 +30,14 @@ export function formatJob(job: Job, topics: string[]): string {
   return lines.join("\n");
 }
 
-export type Telegram = { send: (html: string) => Promise<void> };
+/** Кнопки под заказом: «Не то», а после нажатия — «Вернуть». */
+export const rejectButton = (key: string) => ({ inline_keyboard: [[{ text: "Не то", callback_data: `no:${key}` }]] });
+export const undoButton = (key: string) => ({
+  inline_keyboard: [[{ text: "Отмечено «Не то» · Вернуть", callback_data: `undo:${key}` }]],
+});
+
+/** key — заказ, под которым нужна кнопка «Не то». */
+export type Telegram = { send: (html: string, key?: string) => Promise<void> };
 
 /**
  * Ошибка Telegram. permanent — повтор не поможет: не принято само сообщение
@@ -47,41 +54,59 @@ export class TelegramError extends Error {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function telegram(token: string, chatId: string, fetchImpl: typeof fetch = fetch): Telegram {
-  return {
-    async send(html) {
-      for (let attempt = 0; ; attempt++) {
-        const res = await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: chatId, text: html, parse_mode: "HTML", link_preview_options: { is_disabled: true } }),
-          signal: AbortSignal.timeout(15_000),
-        });
-        if (res.ok) return;
-        const body = (await res.json().catch(() => ({}))) as { description?: string; parameters?: { retry_after?: number } };
-        // Слишком часто — Telegram говорит, сколько подождать
-        if (res.status === 429 && attempt < 3) {
-          await sleep(((body.parameters?.retry_after ?? 5) + 1) * 1000);
-          continue;
-        }
-        // В тексте ошибки нет токена: он только в URL
-        throw new TelegramError(`Telegram ответил ${res.status}: ${body.description ?? ""}`.trim(), res.status === 400 && /can't parse|too long|text is empty/i.test(body.description ?? ""));
+export type TelegramApi = <T = unknown>(method: string, params?: object, timeoutMs?: number) => Promise<T>;
+
+/** Вызов Bot API. На 429 ждёт, сколько скажет Telegram, до трёх раз. */
+export function telegramApi(token: string, fetchImpl: typeof fetch = fetch): TelegramApi {
+  return async <T,>(method: string, params: object = {}, timeoutMs = 15_000): Promise<T> => {
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetchImpl(`https://api.telegram.org/bot${token}/${method}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        result?: T;
+        description?: string;
+        parameters?: { retry_after?: number };
+      };
+      if (res.ok && body.ok !== false) return body.result as T;
+      if (res.status === 429 && attempt < 3) {
+        await sleep(((body.parameters?.retry_after ?? 5) + 1) * 1000);
+        continue;
       }
+      // В тексте ошибки нет токена: он только в URL
+      throw new TelegramError(
+        `Telegram ответил ${res.status}: ${body.description ?? ""}`.trim(),
+        res.status === 400 && /can't parse|too long|text is empty/i.test(body.description ?? ""),
+      );
+    }
+  };
+}
+
+export function telegram(api: TelegramApi, chatId: string): Telegram {
+  return {
+    async send(html, key) {
+      await api("sendMessage", {
+        chat_id: chatId,
+        text: html,
+        parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
+        ...(key ? { reply_markup: rejectButton(key) } : {}),
+      });
     },
   };
 }
 
 /** chat_id тех, кто писал боту, — чтобы узнать свой при настройке. */
-export async function recentChats(token: string, fetchImpl: typeof fetch = fetch): Promise<{ id: number; name: string }[]> {
-  const res = await fetchImpl(`https://api.telegram.org/bot${token}/getUpdates`, { signal: AbortSignal.timeout(15_000) });
-  const body = (await res.json()) as {
-    ok: boolean;
-    description?: string;
-    result?: { message?: { chat: { id: number; first_name?: string; username?: string; title?: string } } }[];
-  };
-  if (!body.ok) throw new Error(`Telegram ответил ${res.status}: ${body.description ?? ""}`);
+export async function recentChats(api: TelegramApi): Promise<{ id: number; name: string }[]> {
+  const updates = await api<{ message?: { chat: { id: number; first_name?: string; username?: string; title?: string } } }[]>(
+    "getUpdates",
+  );
   const chats = new Map<number, string>();
-  for (const u of body.result ?? []) {
+  for (const u of updates) {
     const c = u.message?.chat;
     if (c) chats.set(c.id, c.title ?? (c.username ? `@${c.username}` : (c.first_name ?? "")));
   }

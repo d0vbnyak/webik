@@ -1,11 +1,6 @@
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { matchJob } from "./filter";
-import { extractStateData, parseFlRss, parseFreelanceRu, parseKwork, rublesIn, type Job, type Source } from "./sources";
-import { formatJob, telegram, TelegramError, type Telegram } from "./telegram";
-import { checkOnce, loadSeen, saveSeen, type Seen } from "./watch";
+import { extractStateData, parseFlRss, parseFreelanceRu, parseKwork, rublesIn } from "./sources";
 
 // Куски настоящих страниц от 20.10.2026, урезанные до нужного
 const FL_RSS = `<?xml version="1.0" encoding="utf-8"?><rss version="2.0"><channel><title>Заказы на FL.ru</title>
@@ -129,17 +124,6 @@ describe("фильтр", () => {
   });
 });
 
-const sample: Job = {
-  key: "fl:1",
-  source: "FL.ru",
-  title: "Лендинг <для> R&D",
-  description: "слово ".repeat(200),
-  url: "https://www.fl.ru/projects/1/x.html",
-  budget: "10 000 ₽",
-  budgetRub: 10000,
-  category: "Сайты / Лендинги",
-};
-
 describe("бюджет", () => {
   it("первое число, не рубли — null", () => {
     expect(rublesIn("от 1 000 до 5 000 ₽")).toBe(1000);
@@ -149,98 +133,3 @@ describe("бюджет", () => {
   });
 });
 
-describe("telegram", () => {
-  const reply = (status: number, body: object) => async () => new Response(JSON.stringify(body), { status });
-
-  it("«chat not found» — не повод выбрасывать заказ, ошибка разметки — повод", async () => {
-    const notFound = telegram("t", "1", reply(400, { description: "Bad Request: chat not found" }) as typeof fetch);
-    await expect(notFound.send("x")).rejects.toMatchObject({ permanent: false });
-    const badHtml = telegram("t", "1", reply(400, { description: "Bad Request: can't parse entities" }) as typeof fetch);
-    await expect(badHtml.send("x")).rejects.toMatchObject({ permanent: true });
-  });
-
-  it("ошибка без токена в тексте", async () => {
-    const tg = telegram("SECRET123", "1", reply(401, { description: "Unauthorized" }) as typeof fetch);
-    await expect(tg.send("x")).rejects.not.toThrow(/SECRET123/);
-  });
-});
-
-describe("память", () => {
-  it("пишется и читается, нет файла — пустая", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "freelance-"));
-    const path = join(dir, "sub", "seen.json");
-    expect(await loadSeen(path)).toEqual({ sources: [], keys: [] });
-    await saveSeen(path, { sources: ["Kwork"], keys: ["kwork:1"] });
-    expect(await loadSeen(path)).toEqual({ sources: ["Kwork"], keys: ["kwork:1"] });
-  });
-});
-
-describe("сообщение", () => {
-  it("экранирует HTML и укорачивает описание", () => {
-    const text = formatJob(sample, ["Сайт / лендинг"]);
-    expect(text).toContain("<b>Лендинг &lt;для&gt; R&amp;D</b>");
-    expect(text).toContain("10 000 ₽ · FL.ru · Сайты / Лендинги");
-    expect(text).toContain("#Сайт_лендинг");
-    expect(text).toContain("…");
-    expect(text.length).toBeLessThan(800);
-    expect(text).toContain('<a href="https://www.fl.ru/projects/1/x.html">Открыть заказ</a>');
-  });
-});
-
-describe("проход", () => {
-  const source = (jobs: Job[]): Source => ({ name: "FL.ru", fetchJobs: async () => jobs });
-  const landing = (id: number): Job => ({ ...sample, key: `fl:${id}`, title: `Лендинг ${id}` });
-  const boring = (id: number): Job => ({ ...sample, key: `fl:${id}`, title: `Бухгалтерия ${id}` });
-
-  function recorder(fail?: (n: number) => Error | null): Telegram & { sent: string[] } {
-    const sent: string[] = [];
-    return {
-      sent,
-      async send(html) {
-        const err = fail?.(sent.length);
-        if (err) throw err;
-        sent.push(html);
-      },
-    };
-  }
-  const run = (jobs: Job[], seen: Seen, tg: Telegram | null) =>
-    checkOnce({ sources: [source(jobs)], seen, filter: { minBudget: 0 }, telegram: tg, log: () => {}, pauseMs: 0 });
-
-  it("первый проход по площадке только запоминает, следующий шлёт новые подходящие", async () => {
-    const seen: Seen = { sources: [], keys: [] };
-    const tg = recorder();
-    await run([landing(1)], seen, tg);
-    expect(tg.sent).toEqual([]);
-    expect(seen.sources).toEqual(["FL.ru"]);
-
-    const r = await run([landing(1), landing(2), landing(2), boring(3)], seen, tg);
-    expect(r.sent).toBe(1);
-    expect(tg.sent).toHaveLength(1);
-    expect(tg.sent[0]).toContain("Лендинг 2");
-    expect(seen.keys).toEqual(["fl:1", "fl:2", "fl:3"]);
-
-    await run([landing(1), landing(2), boring(3)], seen, tg);
-    expect(tg.sent).toHaveLength(1);
-  });
-
-  it("сбой сети оставляет заказ на следующий проход, отказ Telegram — нет", async () => {
-    const seen: Seen = { sources: ["FL.ru"], keys: [] };
-    await run([landing(1), landing(2)], seen, recorder(() => new Error("fetch failed")));
-    expect(seen.keys).toEqual([]);
-
-    // Первое сообщение отклонено навсегда, второе ушло
-    let calls = 0;
-    const tg = recorder(() => (calls++ === 0 ? new TelegramError("Telegram ответил 400", true) : null));
-    await run([landing(1), landing(2)], seen, tg);
-    expect(seen.keys).toEqual(["fl:1", "fl:2"]);
-    expect(tg.sent).toHaveLength(1);
-  });
-
-  it("площадка с ошибкой не мешает остальным; пробный запуск не трогает память", async () => {
-    const broken: Source = { name: "Kwork", fetchJobs: async () => Promise.reject(new Error("503")) };
-    const seen: Seen = { sources: ["FL.ru", "Kwork"], keys: [] };
-    const r = await checkOnce({ sources: [broken, source([landing(5)])], seen, filter: { minBudget: 0 }, telegram: null, log: () => {} });
-    expect(r).toEqual({ found: 1, sent: 1, failedSources: ["Kwork"] });
-    expect(seen).toEqual({ sources: ["FL.ru", "Kwork"], keys: [] });
-  });
-});

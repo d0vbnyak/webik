@@ -91,7 +91,8 @@ Node.js ставился через winget: если сессия не види�
   и цены — `server/ai/yandex.ts`. Чтение сайтов защищено от SSRF (`server/ai/site.ts`).
   Подробности и замер — `docs/ai-admin.md`, замер — `server/cli/opener-eval.ts` (тратит деньги).
 - **Бот заказов с фриланс-бирж** — `server/freelance/`, `npm run freelance`: FL.ru,
-  Kwork, freelance.ru → Telegram по темам студии. Запускается не на проде (оттуда
+  Kwork, freelance.ru → Telegram по темам студии, кнопка «Не то» учит фильтр,
+  /stats — счётчики. Запускается не на проде (оттуда
   Telegram закрыт). Подробности — `docs/freelance-bot.md`.
 - **Заявки** — `server/orders.ts`: CRM, письмо, лимиты; общие для чата и формы.
 - **Общее** — `shared/`: контакты, цены (`prices.json`), проверка заявки.

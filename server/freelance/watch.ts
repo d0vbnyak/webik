@@ -2,46 +2,22 @@
  * Один проход бота: собрать заказы со всех площадок, отобрать интересные,
  * прислать новые в Telegram, запомнить отправленное.
  *
- * Память — JSON-файл с ключами уже виденных заказов. Площадку, которую бот
- * читает впервые, он только запоминает, не присылая: иначе первый запуск
- * завалил бы чат сотней старых заказов.
+ * Площадку, которую бот читает впервые, он только запоминает, не присылая:
+ * иначе первый запуск завалил бы чат сотней старых заказов. Память и обучение
+ * на «Не то» — state.ts.
  */
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
 import { matchJob, type FilterOptions } from "./filter";
 import type { Job, Source } from "./sources";
+import { bump, learnedBlock, learnedRules, type State } from "./state";
 import { formatJob, TelegramError, type Telegram } from "./telegram";
-
-/** Сколько ключей помнить. Площадки отдают сотню-другую заказов — запаса на месяцы. */
-const SEEN_LIMIT = 20_000;
-
-export type Seen = { sources: string[]; keys: string[] };
-
-export async function loadSeen(path: string): Promise<Seen> {
-  try {
-    const data = JSON.parse(await readFile(path, "utf8")) as Partial<Seen>;
-    return { sources: data.sources ?? [], keys: data.keys ?? [] };
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return { sources: [], keys: [] };
-    throw e;
-  }
-}
-
-/** Через временный файл: оборванная запись не испортит память. */
-export async function saveSeen(path: string, seen: Seen): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  const tmp = `${path}.tmp`;
-  await writeFile(tmp, JSON.stringify({ sources: seen.sources, keys: seen.keys.slice(-SEEN_LIMIT) }));
-  await rename(tmp, path);
-}
 
 export type Log = (line: string) => void;
 
-export type CheckResult = { found: number; sent: number; failedSources: string[] };
+export type CheckResult = { found: number; sent: number; muted: number; failedSources: string[] };
 
 export async function checkOnce(opts: {
   sources: Source[];
-  seen: Seen;
+  state: State;
   filter: FilterOptions;
   /** null — пробный запуск: заказы печатаются в лог, память не меняется. */
   telegram: Telegram | null;
@@ -51,21 +27,31 @@ export async function checkOnce(opts: {
   /** Сохранить память после каждого сообщения: Ctrl+C посреди рассылки не даст повторов. */
   persist?: () => Promise<void>;
 }): Promise<CheckResult> {
-  const { seen, log } = opts;
-  const known = new Set(seen.keys);
-  const result: CheckResult = { found: 0, sent: 0, failedSources: [] };
+  const { state, log } = opts;
+  const live = opts.telegram !== null;
+  const known = new Set(state.keys);
+  const rules = learnedRules(state);
+  const result: CheckResult = { found: 0, sent: 0, muted: 0, failedSources: [] };
+  const now = () => new Date().toISOString();
 
   const batches = await Promise.all(
     opts.sources.map(async (source) => {
       try {
-        return { source, jobs: await source.fetchJobs() };
+        const jobs = await source.fetchJobs();
+        if (live) state.status[source.name] = { ok: true, at: now(), count: jobs.length };
+        return { source, jobs };
       } catch (e) {
-        log(`${source.name}: ${(e as Error).message}`);
+        const error = (e as Error).message;
+        log(`${source.name}: ${error}`);
         result.failedSources.push(source.name);
+        const prev = state.status[source.name];
+        const at = now();
+        if (live) state.status[source.name] = { ok: false, at, count: 0, error, failingSince: prev && !prev.ok ? (prev.failingSince ?? prev.at) : at };
         return { source, jobs: [] as Job[] };
       }
     }),
   );
+  if (live) state.lastCheckAt = now();
 
   for (const { source, jobs } of batches) {
     if (result.failedSources.includes(source.name)) continue;
@@ -74,17 +60,26 @@ export async function checkOnce(opts: {
     result.found += jobs.length;
 
     // Пробный запуск показывает всё подходящее, в том числе с новых площадок
-    if (opts.telegram && !seen.sources.includes(source.name)) {
-      seen.keys.push(...fresh.map((j) => j.key));
-      seen.sources.push(source.name);
+    if (live && !state.sources.includes(source.name)) {
+      state.keys.push(...fresh.map((j) => j.key));
+      state.sources.push(source.name);
       log(`${source.name}: первый запуск, запомнил ${fresh.length} заказов без отправки`);
       continue;
     }
+    if (live) bump(state, "read", fresh.length);
 
     for (const job of fresh) {
       const match = matchJob(job, opts.filter);
-      if (!match) {
-        if (opts.telegram) seen.keys.push(job.key);
+      const blocked = match && learnedBlock(job, rules);
+      if (!match || blocked) {
+        if (blocked) {
+          result.muted++;
+          log(`отсеял по «Не то» (${blocked}): ${job.title}`);
+        }
+        if (live) {
+          state.keys.push(job.key);
+          if (blocked) bump(state, "muted");
+        }
         continue;
       }
       if (!opts.telegram) {
@@ -93,14 +88,16 @@ export async function checkOnce(opts: {
         continue;
       }
       try {
-        await opts.telegram.send(formatJob(job, match.topics));
+        await opts.telegram.send(formatJob(job, match.topics), job.key);
         result.sent++;
-        seen.keys.push(job.key);
+        state.keys.push(job.key);
+        state.sent.push({ key: job.key, title: job.title, source: job.source, category: job.category, at: now() });
+        bump(state, "sent");
       } catch (e) {
         log(`Telegram: ${(e as Error).message} — ${job.url}`);
         // Сообщение не приняли — повтор не поможет, пропускаем заказ.
         // Сеть или Telegram недоступны — остальное отправим в следующий проход.
-        if (e instanceof TelegramError && e.permanent) seen.keys.push(job.key);
+        if (e instanceof TelegramError && e.permanent) state.keys.push(job.key);
         else return result;
       }
       // Не удалось записать (на Windows rename бывает занят) — запишется в конце прохода
