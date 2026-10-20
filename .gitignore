@@ -30,3 +30,6 @@ public/coffe-01/*.mp4
 
 # Сборка сервера (npm run build:server)
 build/
+
+# Токен бота заказов с фриланс-бирж (npm run freelance)
+.env.freelance

@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "server": "tsx server/main.ts",
     "admin:create": "tsx server/cli/create-admin.ts",
-    "build:server": "esbuild server/main.ts server/cli/create-admin.ts --bundle --platform=node --format=esm --target=node24 --packages=external --outdir=build --entry-names=[name] --out-extension:.js=.mjs"
+    "build:server": "esbuild server/main.ts server/cli/create-admin.ts --bundle --platform=node --format=esm --target=node24 --packages=external --outdir=build --entry-names=[name] --out-extension:.js=.mjs",
+    "freelance": "tsx server/cli/freelance-watch.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
