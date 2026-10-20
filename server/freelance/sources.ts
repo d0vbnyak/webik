@@ -72,6 +72,16 @@ export function parseRub(s: string): number | null {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
 }
 
+/**
+ * Сумма в рублях из текста бюджета: первое число («от 1 000 до 5 000» → 1000).
+ * Валюта — не рубли — null: порог в рублях к ней не применить.
+ */
+export function rublesIn(text: string): number | null {
+  if (/[$€]|usd|eur/i.test(text)) return null;
+  const first = text.match(/\d[\d \u00a0]*(?:[.,]\d+)?/);
+  return first ? parseRub(first[0]) : null;
+}
+
 const rub = (n: number) => `${n.toLocaleString("ru-RU").replace(/ /g, " ")} ₽`;
 
 // ─── FL.ru ──────────────────────────────────────────────────────────────────
@@ -91,8 +101,7 @@ export function parseFlRss(xml: string): Job[] {
   const jobs: Job[] = [];
   for (const item of all(doc, "item")) {
     const field = (name: string) => item.querySelector(name)?.textContent?.trim() ?? "";
-    const url = field("link");
-    const id = url.match(/\/projects\/(\d+)/)?.[1];
+    const id = field("link").match(/\/projects\/(\d+)/)?.[1];
     if (!id) continue;
 
     let title = plainText(field("title"));
@@ -102,7 +111,7 @@ export function parseFlRss(xml: string): Job[] {
     if (tail) {
       title = title.slice(0, tail.index).trim();
       budget = tail[1].trim();
-      budgetRub = parseRub(budget.replace(/[^\d\s.,]/g, ""));
+      budgetRub = rublesIn(budget);
     } else {
       title = title.replace(/\s*\([^)]*\)\s*$/, "").trim();
     }
@@ -112,7 +121,8 @@ export function parseFlRss(xml: string): Job[] {
       source: "FL.ru",
       title,
       description: plainText(field("description")),
-      url,
+      // Адрес из id, а не из ленты: в чужой строке может оказаться что угодно
+      url: `https://www.fl.ru/projects/${id}/`,
       budget,
       budgetRub,
       category: field("category") || null,
@@ -184,7 +194,8 @@ export function parseKwork(html: string): Job[] {
       description: plainText(w.description),
       url: `https://kwork.ru/projects/${w.id}/view`,
       budget: price ? (upTo ? `${rub(price)}, допустимо до ${rub(upTo)}` : rub(price)) : null,
-      budgetRub: upTo ?? price,
+      // possiblePriceLimit — всегда тройная цена, по нему порог бюджета ничего бы не отсекал
+      budgetRub: price,
       category: categoryNames.get(String(w.category_id)) ?? null,
     };
   });
@@ -216,14 +227,14 @@ export function parseFreelanceRu(html: string): Job[] {
     if (!link || !id) continue;
 
     const budgetText = plainText(card.querySelector(".task-card__budget")?.innerHTML ?? "");
-    const budgetRub = parseRub(budgetText.replace(/[^\d\s.,]/g, ""));
+    const budgetRub = rublesIn(budgetText);
     jobs.push({
       key: `freelance.ru:${id}`,
       source: "freelance.ru",
       title: plainText(link.innerHTML),
       description: plainText(card.querySelector(".task-card__desc")?.innerHTML ?? ""),
       url: `https://freelance.ru/task/view/${id}`,
-      budget: budgetRub ? budgetText : null,
+      budget: budgetText || null,
       budgetRub,
       category:
         all(card, ".task-chip--cat")

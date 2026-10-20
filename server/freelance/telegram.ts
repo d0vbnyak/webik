@@ -8,7 +8,7 @@ import type { Job } from "./sources";
 
 const DESCRIPTION_LIMIT = 500;
 
-const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 function cut(s: string, limit: number): string {
   if (s.length <= limit) return s;
@@ -32,7 +32,11 @@ export function formatJob(job: Job, topics: string[]): string {
 
 export type Telegram = { send: (html: string) => Promise<void> };
 
-/** Ошибка Telegram. permanent — повтор не поможет (400: сообщение не принято). */
+/**
+ * Ошибка Telegram. permanent — повтор не поможет: не принято само сообщение
+ * (разметка, длина). «chat not found» и прочие 400 — не permanent: это
+ * настройка, и заказы должны дождаться, пока её исправят.
+ */
 export class TelegramError extends Error {
   readonly permanent: boolean;
   constructor(message: string, permanent: boolean) {
@@ -61,7 +65,7 @@ export function telegram(token: string, chatId: string, fetchImpl: typeof fetch 
           continue;
         }
         // В тексте ошибки нет токена: он только в URL
-        throw new TelegramError(`Telegram ответил ${res.status}: ${body.description ?? ""}`.trim(), res.status === 400);
+        throw new TelegramError(`Telegram ответил ${res.status}: ${body.description ?? ""}`.trim(), res.status === 400 && /can't parse|too long|text is empty/i.test(body.description ?? ""));
       }
     },
   };

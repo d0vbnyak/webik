@@ -1,8 +1,11 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { matchJob } from "./filter";
-import { extractStateData, parseFlRss, parseFreelanceRu, parseKwork, type Job, type Source } from "./sources";
-import { formatJob, TelegramError, type Telegram } from "./telegram";
-import { checkOnce, type Seen } from "./watch";
+import { extractStateData, parseFlRss, parseFreelanceRu, parseKwork, rublesIn, type Job, type Source } from "./sources";
+import { formatJob, telegram, TelegramError, type Telegram } from "./telegram";
+import { checkOnce, loadSeen, saveSeen, type Seen } from "./watch";
 
 // Куски настоящих страниц от 20.10.2026, урезанные до нужного
 const FL_RSS = `<?xml version="1.0" encoding="utf-8"?><rss version="2.0"><channel><title>Заказы на FL.ru</title>
@@ -51,7 +54,7 @@ describe("площадки", () => {
       key: "kwork:3267982",
       url: "https://kwork.ru/projects/3267982/view",
       budget: "20 000 ₽, допустимо до 60 000 ₽",
-      budgetRub: 60000,
+      budgetRub: 20000,
       category: "Разработка и IT / Сайт под ключ",
     });
     expect(job.description).toBe('Здравствуйте!\nТребуется лендинг "под ключ" {}');
@@ -104,6 +107,16 @@ describe("фильтр", () => {
     expect(topics("Вакансия: разработчик чат-ботов")).toBeNull();
   });
 
+  it("стоп-слова не режут обычные заказы студии", () => {
+    expect(topics("Чат-бот для консультаций клиентов")).toEqual(["Чат-бот"]);
+    expect(topics("Лендинг для онлайн-обучения")).toEqual(["Сайт / лендинг"]);
+    expect(topics("Лендинг с видео")).toEqual(["Сайт / лендинг"]);
+    expect(topics("Бот для записи на фотосессию")).toEqual(["Чат-бот"]);
+    expect(topics("Генерация AI-видео для Reels")).toBeNull();
+    expect(topics("Нужен SEO для сайта")).toBeNull();
+    expect(topics("Нужно продвижение сайта")).toBeNull();
+  });
+
   it("порог бюджета не трогает заказы без бюджета", () => {
     expect(matchJob(job("Лендинг", "", 5000), { minBudget: 10000 })).toBeNull();
     expect(matchJob(job("Лендинг", "", 15000), { minBudget: 10000 })).not.toBeNull();
@@ -121,6 +134,41 @@ const sample: Job = {
   budgetRub: 10000,
   category: "Сайты / Лендинги",
 };
+
+describe("бюджет", () => {
+  it("первое число, не рубли — null", () => {
+    expect(rublesIn("от 1 000 до 5 000 ₽")).toBe(1000);
+    expect(rublesIn("2 000 ₽ / заказ")).toBe(2000);
+    expect(rublesIn("500 $")).toBeNull();
+    expect(rublesIn("по договорённости")).toBeNull();
+  });
+});
+
+describe("telegram", () => {
+  const reply = (status: number, body: object) => async () => new Response(JSON.stringify(body), { status });
+
+  it("«chat not found» — не повод выбрасывать заказ, ошибка разметки — повод", async () => {
+    const notFound = telegram("t", "1", reply(400, { description: "Bad Request: chat not found" }) as typeof fetch);
+    await expect(notFound.send("x")).rejects.toMatchObject({ permanent: false });
+    const badHtml = telegram("t", "1", reply(400, { description: "Bad Request: can't parse entities" }) as typeof fetch);
+    await expect(badHtml.send("x")).rejects.toMatchObject({ permanent: true });
+  });
+
+  it("ошибка без токена в тексте", async () => {
+    const tg = telegram("SECRET123", "1", reply(401, { description: "Unauthorized" }) as typeof fetch);
+    await expect(tg.send("x")).rejects.not.toThrow(/SECRET123/);
+  });
+});
+
+describe("память", () => {
+  it("пишется и читается, нет файла — пустая", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "freelance-"));
+    const path = join(dir, "sub", "seen.json");
+    expect(await loadSeen(path)).toEqual({ sources: [], keys: [] });
+    await saveSeen(path, { sources: ["Kwork"], keys: ["kwork:1"] });
+    expect(await loadSeen(path)).toEqual({ sources: ["Kwork"], keys: ["kwork:1"] });
+  });
+});
 
 describe("сообщение", () => {
   it("экранирует HTML и укорачивает описание", () => {

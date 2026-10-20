@@ -50,7 +50,9 @@ const tg = dry ? null : telegram(token!, chatId!);
 
 async function tick() {
   const seen = await loadSeen(statePath);
-  const r = await checkOnce({ sources: ALL_SOURCES, seen, filter: { minBudget }, telegram: tg, log });
+  const r = await checkOnce({ sources: ALL_SOURCES, seen, filter: { minBudget }, telegram: tg, log,
+    persist: () => saveSeen(statePath, seen),
+  });
   if (tg) await saveSeen(statePath, seen);
   log(`заказов на площадках: ${r.found}, ${dry ? "подходит" : "отправлено"}: ${r.sent}${r.failedSources.length ? `, не прочитались: ${r.failedSources.join(", ")}` : ""}`);
 }

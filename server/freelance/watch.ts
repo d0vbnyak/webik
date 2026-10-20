@@ -48,6 +48,8 @@ export async function checkOnce(opts: {
   log: Log;
   /** Пауза между сообщениями: Telegram не любит больше одного в секунду в чат. */
   pauseMs?: number;
+  /** Сохранить память после каждого сообщения: Ctrl+C посреди рассылки не даст повторов. */
+  persist?: () => Promise<void>;
 }): Promise<CheckResult> {
   const { seen, log } = opts;
   const known = new Set(seen.keys);
@@ -94,6 +96,7 @@ export async function checkOnce(opts: {
         await opts.telegram.send(formatJob(job, match.topics));
         result.sent++;
         seen.keys.push(job.key);
+        await opts.persist?.();
         await new Promise((r) => setTimeout(r, opts.pauseMs ?? 1100));
       } catch (e) {
         log(`Telegram: ${(e as Error).message} — ${job.url}`);
