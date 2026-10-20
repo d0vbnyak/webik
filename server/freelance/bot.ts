@@ -52,7 +52,7 @@ export async function handleUpdate(u: Update, ctx: BotContext): Promise<void> {
     } else if (action === "undo" && mark) {
       state.rejected = state.rejected.filter((r) => r.key !== key);
       // Счётчик — того дня, когда ставили отметку
-      bump(state, "rejected", -1, new Date(mark.at));
+      bump(state, "rejected", -1, mark.at && !Number.isNaN(Date.parse(mark.at)) ? new Date(mark.at) : new Date());
     }
     // Ни сбой записи, ни устаревшее нажатие («query is too old» — в --once
     // нажатие ждёт следующего прохода) не должны помешать сменить кнопку
@@ -83,7 +83,7 @@ export async function handleUpdate(u: Update, ctx: BotContext): Promise<void> {
   else if (command === "reset") {
     const count = state.rejected.length;
     state.rejected = [];
-    await ctx.persist();
+    await ctx.persist().catch((e: Error) => ctx.log(`память: ${e.message}`));
     text = `Забыл все отметки «Не то» (${count}). Выученные правила сняты.`;
   } else if (command) text = HELP;
   else return;
