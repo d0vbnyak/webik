@@ -234,7 +234,7 @@ export function parseFreelanceRu(html: string): Job[] {
       title: plainText(link.innerHTML),
       description: plainText(card.querySelector(".task-card__desc")?.innerHTML ?? ""),
       url: `https://freelance.ru/task/view/${id}`,
-      budget: budgetText || null,
+      budget: /[0-9]/.test(budgetText) ? budgetText : null,
       budgetRub,
       category:
         all(card, ".task-chip--cat")

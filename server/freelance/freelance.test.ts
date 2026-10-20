@@ -112,6 +112,11 @@ describe("фильтр", () => {
     expect(topics("Лендинг для онлайн-обучения")).toEqual(["Сайт / лендинг"]);
     expect(topics("Лендинг с видео")).toEqual(["Сайт / лендинг"]);
     expect(topics("Бот для записи на фотосессию")).toEqual(["Чат-бот"]);
+    expect(topics("ИИ-бот для фотостудии")).toEqual(["Чат-бот", "ИИ"]);
+    expect(topics("Сайт для фотостудии с ИИ-ассистентом")).toEqual(["ИИ"]);
+    expect(topics("SEO-оптимизация и редизайн сайта")).toEqual(["Редизайн"]);
+    expect(topics("AI-фотосессия для бренда")).toBeNull();
+    expect(topics("Фото товаров через нейросеть")).toBeNull();
     expect(topics("Генерация AI-видео для Reels")).toBeNull();
     expect(topics("Нужен SEO для сайта")).toBeNull();
     expect(topics("Нужно продвижение сайта")).toBeNull();

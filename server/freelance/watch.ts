@@ -96,8 +96,6 @@ export async function checkOnce(opts: {
         await opts.telegram.send(formatJob(job, match.topics));
         result.sent++;
         seen.keys.push(job.key);
-        await opts.persist?.();
-        await new Promise((r) => setTimeout(r, opts.pauseMs ?? 1100));
       } catch (e) {
         log(`Telegram: ${(e as Error).message} — ${job.url}`);
         // Сообщение не приняли — повтор не поможет, пропускаем заказ.
@@ -105,6 +103,9 @@ export async function checkOnce(opts: {
         if (e instanceof TelegramError && e.permanent) seen.keys.push(job.key);
         else return result;
       }
+      // Не удалось записать (на Windows rename бывает занят) — запишется в конце прохода
+      await opts.persist?.().catch((e: Error) => log(`память: ${e.message}`));
+      await new Promise((r) => setTimeout(r, opts.pauseMs ?? 1100));
     }
   }
   return result;
