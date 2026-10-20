@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { handleUpdate, type BotContext, type Update } from "./bot";
 import type { Job, Source } from "./sources";
-import { bump, emptyState, learnedBlock, learnedRules, loadState, saveState, statsText, type State } from "./state";
+import { bump, dayKey, emptyState, learnedBlock, learnedRules, loadState, saveState, statsText, type State } from "./state";
 import {
   formatJob,
   rejectButton,
@@ -71,37 +71,44 @@ describe("память", () => {
 
 describe("обучение на «Не то»", () => {
   const sent = (key: string, title: string, category: string | null) => ({ key, title, source: "FL.ru", category, at: "" });
-  const reject = (...keys: string[]) => keys.map((key) => ({ key, at: "" }));
+  const keys = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => String(from + i));
+  const reject = (list: string[]) => list.map((key) => ({ key, at: "" }));
 
-  it("раздел выучивается после 3 «Не то», если это почти всё присланное из него", () => {
+  it("раздел выключается, только когда из него пришло от 10 и отклонено не меньше 80%", () => {
     const state = emptyState();
-    state.sent = [
-      sent("1", "Чат-бот для стоматологии", "Мессенджеры / Боты"),
-      sent("2", "Телеграм бот записи", "Мессенджеры / Боты"),
-      sent("3", "Бот для магазина", "Мессенджеры / Боты"),
-      sent("4", "Лендинг для школы", "Сайты / Лендинги"),
-    ];
-    state.rejected = reject("1", "2");
+    state.sent = keys(0, 10).map((k) => sent(k, `Полиграфия ${k}`, "Дизайн / Полиграфия"));
+    // Первые 4 дешёвых заказа подряд — ещё не повод выключать раздел
+    state.rejected = reject(keys(0, 4));
     expect(learnedRules(state).categories).toEqual([]);
-    state.rejected = reject("1", "2", "3");
+    state.rejected = reject(keys(0, 7));
+    expect(learnedRules(state).categories).toEqual([]);
+    state.rejected = reject(keys(0, 8));
     const rules = learnedRules(state);
-    expect(rules.categories).toEqual(["Мессенджеры / Боты"]);
-    expect(learnedBlock({ title: "Ещё бот", category: "Мессенджеры / Боты" }, rules)).toBe("раздел «Мессенджеры / Боты»");
-    expect(learnedBlock({ title: "Лендинг", category: "Сайты / Лендинги" }, rules)).toBeNull();
+    expect(rules.categories).toEqual(["Дизайн / Полиграфия"]);
+    expect(learnedBlock({ title: "Буклет", category: "Дизайн / Полиграфия" }, rules)).toBe("раздел «Дизайн / Полиграфия»");
+    expect(learnedBlock({ title: "Буклет", category: "Сайты / Лендинги" }, rules)).toBeNull();
   });
 
-  it("слово выучивается, только если не встречалось в неотклонённых", () => {
+  it("слова учатся после 30 присланных и только если не встречались в неотклонённых", () => {
     const state = emptyState();
     state.sent = [
       sent("1", "Бот для казино", null),
       sent("2", "Сайт казино под ключ", null),
       sent("3", "Лендинг казино", null),
-      sent("4", "Сайт для пекарни", null),
     ];
-    state.rejected = reject("1", "2", "3");
-    // «сайт» есть и в неотклонённом «Сайт для пекарни» — не выучивается
+    state.rejected = reject(["1", "2", "3"]);
+    expect(learnedRules(state).words).toEqual([]); // присланных пока мало
+
+    state.sent.push(...keys(4, 31).map((k) => sent(k, `Сайт для пекарни ${k}`, null)));
     expect(learnedRules(state).words).toEqual(["казино"]);
     expect(learnedBlock({ title: "Сделать лендинг для казино", category: null }, learnedRules(state))).toBe("слово «казино…»");
+  });
+
+  it("слова тем студии и общие слова не выучиваются", () => {
+    const state = emptyState();
+    state.sent = keys(0, 30).map((k) => sent(k, `Срочно нужен лендинг сайтов ${k}`, null));
+    state.rejected = reject(keys(0, 30));
+    expect(learnedRules(state).words).toEqual([]);
   });
 });
 
@@ -133,6 +140,39 @@ describe("кнопки и /stats", () => {
     expect(state.rejected).toEqual([]);
     expect(Object.values(state.days)[0].rejected).toBe(0);
     expect(calls.at(-1)?.params.reply_markup).toEqual(rejectButton("fl:5"));
+  });
+
+  it("устаревшее нажатие (--once) и сбой записи не мешают сменить кнопку", async () => {
+    const { calls, state, ctx } = fakeBot();
+    ctx.persist = async () => Promise.reject(new Error("EBUSY"));
+    const api = ctx.api;
+    ctx.api = (async (method: string, params?: object) => {
+      if (method === "answerCallbackQuery") throw new TelegramError("Telegram ответил 400: query is too old", false);
+      return api(method, params);
+    }) as TelegramApi;
+    await handleUpdate(press("no:fl:5"), ctx);
+    expect(state.rejected.map((r) => r.key)).toEqual(["fl:5"]);
+    expect(calls.find((c) => c.method === "editMessageReplyMarkup")?.params.reply_markup).toEqual(undoButton("fl:5"));
+  });
+
+  it("«Вернуть» уменьшает счётчик того дня, когда ставили отметку", async () => {
+    const { state, ctx } = fakeBot();
+    const yesterday = new Date(Date.now() - 86_400_000);
+    state.rejected = [{ key: "fl:5", at: yesterday.toISOString() }];
+    bump(state, "rejected", 1, yesterday);
+    await handleUpdate(press("undo:fl:5"), ctx);
+    expect(state.days[dayKey(yesterday)].rejected).toBe(0);
+    expect(state.days[dayKey(new Date())]).toBeUndefined();
+  });
+
+  it("/reset забывает все отметки, обычный текст остаётся без ответа", async () => {
+    const { calls, state, ctx } = fakeBot();
+    state.rejected = [{ key: "fl:1", at: "" }, { key: "fl:2", at: "" }];
+    await handleUpdate({ update_id: 4, message: { chat: { id: 42 }, text: "привет" } }, ctx);
+    expect(calls).toEqual([]);
+    await handleUpdate({ update_id: 5, message: { chat: { id: 42 }, text: "/reset" } }, ctx);
+    expect(state.rejected).toEqual([]);
+    expect(String(calls[0].params.text)).toContain("Забыл все отметки «Не то» (2)");
   });
 
   it("чужой чат игнорируется", async () => {
@@ -235,11 +275,15 @@ describe("проход", () => {
   });
 
   it("выученное правило отсекает заказ", async () => {
-    const state = withState({
-      sources: ["FL.ru"],
-      sent: [1, 2, 3].map((i) => ({ key: `fl:${i}`, title: `Лендинг казино ${i}`, source: "FL.ru", category: null, at: "" })),
-      rejected: [1, 2, 3].map((i) => ({ key: `fl:${i}`, at: "" })),
-    });
+    // 3 отклонённых «казино» и 27 обычных: слова уже учатся
+    const sent = Array.from({ length: 30 }, (_, i) => ({
+      key: `fl:${i}`,
+      title: i < 3 ? `Лендинг казино ${i}` : `Лендинг для школы ${i}`,
+      source: "FL.ru",
+      category: null,
+      at: "",
+    }));
+    const state = withState({ sources: ["FL.ru"], sent, rejected: [0, 1, 2].map((i) => ({ key: `fl:${i}`, at: "" })) });
     const tg = recorder();
     const r = await run([{ ...landing(9), title: "Лендинг для казино", category: null }, landing(10)], state, tg);
     expect(r).toMatchObject({ sent: 1, muted: 1 });

@@ -68,12 +68,13 @@ let writing: Promise<void> = Promise.resolve();
  * очереди — рассылка и нажатие кнопки могут сохранять память одновременно.
  */
 export function saveState(path: string, state: State): Promise<void> {
+  // Обрезаются и списки в памяти процесса: в режиме цикла он живёт неделями
+  state.keys = state.keys.slice(-SEEN_LIMIT);
+  state.sent = state.sent.slice(-SENT_LIMIT);
+  state.rejected = state.rejected.slice(-SENT_LIMIT);
   const days = Object.keys(state.days).sort().slice(-DAYS_LIMIT);
   const data = JSON.stringify({
     ...state,
-    keys: state.keys.slice(-SEEN_LIMIT),
-    sent: state.sent.slice(-SENT_LIMIT),
-    rejected: state.rejected.slice(-SENT_LIMIT),
     days: Object.fromEntries(days.map((d) => [d, state.days[d]])),
   });
   const run = writing.then(async () => {
@@ -95,24 +96,38 @@ export function bump(state: State, field: keyof DayStats, by = 1, now = new Date
 
 // ─── Обучение на «Не то» ────────────────────────────────────────────────────
 
-/** Сколько «Не то» нужно, чтобы правило заработало, и какая доля присланного это должна быть. */
-export const LEARN = { minRejects: 3, share: 0.8 };
+/**
+ * Пороги обучения. Осторожные: «Не то» — оценка одного заказа, а на биржах
+ * мусора много и в профильных разделах. Раздел выключается, только когда из
+ * него пришло от 10 заказов и не меньше 8 из них — 80% — отклонены. Слова
+ * учатся, когда всего прислано от 30 заказов: раньше неотклонённых слишком
+ * мало, чтобы отличить общее слово от лишнего.
+ */
+export const LEARN = { categoryMinSent: 10, categoryMinRejects: 8, share: 0.8, wordsAfterSent: 30, wordMinRejects: 3 };
 
 /** Само слово — тема студии («лендинг», «боты»): такое не выучивается, иначе три «Не то» выключат всю тему. */
 const isTopicWord = (w: string) => TOPICS.some((t) => t.patterns.some((p) => p.test(w)));
 
+/** Общие основы, которые есть почти в любом заказе: из-за них нельзя выключать заказы. */
+const COMMON_STEMS = ["сайт", "нужн", "нужен", "сдела", "срочн", "разра", "созда", "дораб", "настр", "проек", "магаз", "компа", "услуг", "работ", "задач", "помощ", "интег", "прилож", "систем", "сервис"];
+
 /** Основы слов заголовка: от 4 букв, первые 6 знаков — «лендинга» и «лендинг» совпадут. */
 export function stems(title: string): Set<string> {
   const words = title.toLowerCase().match(/[a-zа-яё0-9]+/gu) ?? [];
-  return new Set(words.filter((w) => w.length >= 4 && !/^\d+$/.test(w) && !isTopicWord(w)).map((w) => w.slice(0, 6)));
+  return new Set(
+    words
+      .filter((w) => w.length >= 4 && !/^\d+$/.test(w) && !isTopicWord(w) && !COMMON_STEMS.some((c) => w.startsWith(c)))
+      .map((w) => w.slice(0, 6)),
+  );
 }
 
 export type Rules = { categories: string[]; words: string[] };
 
 /**
- * Раздел — лишний, если в нём от 3 «Не то» и это не меньше 80% присланного из него.
+ * Раздел — лишний, если отклонено почти всё, что из него пришло (пороги — LEARN).
  * Слово — лишнее, если встретилось в 3 отклонённых заголовках и ни в одном
- * неотклонённом: так общие слова («сайт», «разработка») не выучатся никогда.
+ * неотклонённом. Выученное «замерзает»: из выключенного раздела заказы больше
+ * не приходят и долю не исправят — снять правило можно «Вернуть» или /reset.
  */
 export function learnedRules(state: State): Rules {
   const rejected = new Set(state.rejected.map((r) => r.key));
@@ -136,9 +151,12 @@ export function learnedRules(state: State): Rules {
 
   return {
     categories: [...cats]
-      .filter(([, c]) => c.rejected >= LEARN.minRejects && c.rejected / c.sent >= LEARN.share)
+      .filter(([, c]) => c.sent >= LEARN.categoryMinSent && c.rejected >= LEARN.categoryMinRejects && c.rejected / c.sent >= LEARN.share)
       .map(([name]) => name),
-    words: [...badWords].filter(([w, n]) => n >= LEARN.minRejects && !goodWords.has(w)).map(([w]) => w),
+    words:
+      state.sent.length < LEARN.wordsAfterSent
+        ? []
+        : [...badWords].filter(([w, n]) => n >= LEARN.wordMinRejects && !goodWords.has(w)).map(([w]) => w),
   };
 }
 
@@ -176,12 +194,14 @@ export function statsText(state: State, sourceNames: string[], now = new Date())
   const rules = learnedRules(state);
   lines.push("");
   if (!rules.categories.length && !rules.words.length) {
-    lines.push(`Фильтр пока ничего не выучил: нужно ${LEARN.minRejects} «Не то» на похожие заказы.`);
+    lines.push("Фильтр пока ничего не выучил.");
   } else {
     lines.push("Больше не присылаю:");
     for (const c of rules.categories) lines.push(`• раздел «${c}»`);
     for (const w of rules.words) lines.push(`• заголовки со словом «${w}…»`);
-    lines.push("Ошиблись — нажмите «Вернуть» под заказом.");
+    lines.push("Ошиблись — «Вернуть» под заказом или /reset, чтобы забыть все «Не то».");
   }
-  return lines.join("\n");
+  // Предел сообщения Telegram — 4096 знаков
+  const text = lines.join("\n");
+  return text.length > 4000 ? `${text.slice(0, 4000)}\n…` : text;
 }

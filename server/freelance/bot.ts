@@ -1,6 +1,6 @@
 /**
  * Что бот принимает от Telegram: нажатия «Не то» / «Вернуть» под заказами и
- * команду /stats. Слушает только свой чат (FREELANCE_CHAT_ID): чужие сообщения
+ * команды /stats и /reset. Слушает только свой чат (FREELANCE_CHAT_ID): чужие сообщения
  * и нажатия молча игнорируются — бота может найти кто угодно.
  *
  * Обновления забираются через getUpdates: вебхук не нужен, и бот работает
@@ -24,12 +24,16 @@ export type BotContext = {
   log: (line: string) => void;
 };
 
-export const COMMANDS = [{ command: "stats", description: "Сколько заказов прочитано и прислано, как читаются площадки" }];
+export const COMMANDS = [
+  { command: "stats", description: "Сколько заказов прочитано и прислано, как читаются площадки" },
+  { command: "reset", description: "Забыть все «Не то» и выученные правила" },
+];
 
 const HELP =
   "Присылаю новые заказы с FL.ru, Kwork и freelance.ru по темам студии.\n\n" +
-  "«Не то» под заказом — такие заказы перестанут приходить, когда наберётся несколько похожих.\n" +
-  "/stats — сколько прочитано и прислано, какие площадки не читаются.";
+  "«Не то» под заказом — такие заказы перестанут приходить, когда наберётся много похожих.\n" +
+  "/stats — сколько прочитано и прислано, какие площадки не читаются.\n" +
+  "/reset — забыть все «Не то».";
 
 export async function handleUpdate(u: Update, ctx: BotContext): Promise<void> {
   const { api, state } = ctx;
@@ -41,19 +45,22 @@ export async function handleUpdate(u: Update, ctx: BotContext): Promise<void> {
       return;
     }
     const [, action, key] = q.data?.match(/^(no|undo):(.+)$/) ?? [];
-    const marked = state.rejected.some((r) => r.key === key);
-    if (action === "no" && !marked) {
+    const mark = state.rejected.find((r) => r.key === key);
+    if (action === "no" && !mark) {
       state.rejected.push({ key, at: new Date().toISOString() });
       bump(state, "rejected");
-    } else if (action === "undo" && marked) {
+    } else if (action === "undo" && mark) {
       state.rejected = state.rejected.filter((r) => r.key !== key);
-      bump(state, "rejected", -1);
+      // Счётчик — того дня, когда ставили отметку
+      bump(state, "rejected", -1, new Date(mark.at));
     }
-    await ctx.persist();
+    // Ни сбой записи, ни устаревшее нажатие («query is too old» — в --once
+    // нажатие ждёт следующего прохода) не должны помешать сменить кнопку
+    await ctx.persist().catch((e: Error) => ctx.log(`память: ${e.message}`));
     await api("answerCallbackQuery", {
       callback_query_id: q.id,
-      text: action === "no" ? "Запомнил. Когда наберётся несколько похожих — такие перестанут приходить" : action ? "Вернул" : "",
-    });
+      text: action === "no" ? "Запомнил. Когда наберётся много похожих — такие перестанут приходить" : action ? "Вернул" : "",
+    }).catch((e: Error) => ctx.log(`ответ на нажатие: ${e.message}`));
     if (action) {
       // Повторное нажатие на ту же кнопку: «message is not modified» — не ошибка
       await api("editMessageReplyMarkup", {
@@ -69,8 +76,17 @@ export async function handleUpdate(u: Update, ctx: BotContext): Promise<void> {
 
   const m = u.message;
   if (!m || String(m.chat.id) !== ctx.chatId) return;
-  const command = m.text?.trim().split(/[\s@]/)[0];
-  const text = command === "/stats" ? statsText(state, ctx.sourceNames) : HELP;
+  // Обычный текст — без ответа: бот не болтает, если чат окажется группой
+  const command = m.text?.trim().match(/^\/(\w+)/)?.[1];
+  let text: string;
+  if (command === "stats") text = statsText(state, ctx.sourceNames);
+  else if (command === "reset") {
+    const count = state.rejected.length;
+    state.rejected = [];
+    await ctx.persist();
+    text = `Забыл все отметки «Не то» (${count}). Выученные правила сняты.`;
+  } else if (command) text = HELP;
+  else return;
   await api("sendMessage", { chat_id: ctx.chatId, text });
 }
 
